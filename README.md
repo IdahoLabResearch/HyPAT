@@ -50,7 +50,7 @@ By clicking the “Settings” button, O-rings can be added, edited, or removed.
 
 ## Installation Instructions
 
-1.	Download this directory in a zip file
+1.	Download HyPAT directory in a zip file
   1.	Select the button “Code” near the top of this directory
   2.	Select “Download ZIP” from the dropdown menu that appears
 2.	Extract the downloaded file to a folder of your choice
