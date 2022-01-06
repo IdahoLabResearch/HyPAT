@@ -1,0 +1,15 @@
+Brief explanation of datafiles:
+
+In the folder "datafiles" there are several Excel spreadsheets containing information that is used by the program to function. Furthermore, the program can edit these files.
+
+In the folder "backup_datafiles," there is a copy of each data file appended with "_backup" to provide easy access to working files in case something happens to the ones edited by the program.
+
+OverviewPlotsSaveFileExample.xlsx is also in backup_datafiles. It's an example of the sort of file you can get from the "save file" button in the Overview Plots tab.
+
+_____________________________________________
+
+default_entry_vars and o-ring_data are used for some variables on the Permeation Estimates tab (and one default_entry_vars term is used in the Permeation Plots tab)
+
+material_data and melting_tempK are used primarily in the Overview Plots tab, although they also provide the information used in the Permeation Estimates menu for sample material
+
+persistent_permeation_input_variables is used in the Permeation Plots tab
