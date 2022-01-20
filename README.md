@@ -42,7 +42,7 @@ M. Shimada, “Tritium Transport in Fusion Reactor Materials” in Comprehensive
 
 ### Usage: Predict Outcomes with "Permeation Estimates” Tab
 
-This tab provides predictions for permeation experiments based on specified user inputs. The required user inputs are highlighted in yellow. The sample properties are thickness (mm) and material. The experimental apparatus parameters are O-ring/sealing method, calibrated leak rate (mol</sub>s<sup>-1</sup>Torr<sup>-1</sup>), secondary side volume (cc), and accumulation time (hr). The specific test parameters are sample temperature (°C) and primary side pressure (Torr).
+This tab provides predictions for permeation experiments based on specified user inputs. The required user inputs are highlighted in yellow. The sample properties are thickness (mm) and material. The experimental apparatus parameters are O-ring/sealing method, calibrated leak rate (mol s<sup>-1</sup> Torr<sup>-1</sup>), secondary side volume (cc), and accumulation time (hr). The specific test parameters are sample temperature (°C) and primary side pressure (Torr).
 
 The results reported in the "FINAL OUTPUT” section include estimated time lag, permeation rate, and final secondary pressure.
 
