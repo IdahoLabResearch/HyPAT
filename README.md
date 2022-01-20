@@ -42,20 +42,19 @@ M. Shimada, “Tritium Transport in Fusion Reactor Materials” in Comprehensive
 
 ### Usage: Predict Outcomes with "Permeation Estimates” Tab
 
-This tab provides predictions for permeation experiments based on specified user inputs. The required user inputs are highlighted in yellow. The sample properties are thickness (mm) and material. The experimental apparatus parameters are O-ring/sealing method, QMS leak rate (mol<sub>(D2)</sub>s<sup>-1</sup>Torr<sup>-1</sup>), secondary side volume (cc), and accumulation time (hr). The specific test parameters are sample temperature (°C) and primary side pressure (Torr).
+This tab provides predictions for permeation experiments based on specified user inputs. The required user inputs are highlighted in yellow. The sample properties are thickness (mm) and material. The experimental apparatus parameters are O-ring/sealing method, calibrated leak rate (mol</sub>s<sup>-1</sup>Torr<sup>-1</sup>), secondary side volume (cc), and accumulation time (hr). The specific test parameters are sample temperature (°C) and primary side pressure (Torr).
 
 The results reported in the "FINAL OUTPUT” section include estimated time lag, permeation rate, and final secondary pressure.
 
-By clicking the “Settings” button, O-rings can be added, edited, or removed. The default values for QMS leak rate and secondary side volume can also be edited there. The options for sample material can be edited using the “Add/Edit Material” button on the Overview Plots tab.
+By clicking the “Settings” button, O-rings can be added, edited, or removed. The default values for calibrated leak rate and secondary side volume can also be edited there. The options for sample material can be edited using the “Add/Edit Material” button on the Overview Plots tab.
 
 ## Installation Instructions
 
-1.	Download HyPAT directory in a zip file
-  1.	Select the button “Code” near the top of this directory
-  2.	Select “Download ZIP” from the dropdown menu that appears
-2.	Extract the downloaded file to a folder of your choice
-3.	Open the command line, then move to the directory “HyPAT” within the downloaded folder
-4.	Run the following code to open the application: python main.py
+1.	Select the button “Code” near the top of this directory
+2.	Select “Download ZIP” from the dropdown menu that appears
+3.	Extract the downloaded file to a folder of your choice
+4.	Open the command line, then move to the directory “HyPAT” within the downloaded folder
+5.	Run the following code to open the application: python main.py
 
 Required Python Packages: matplotlib, pandas, numpy, tkmacosx, mplcursors, scipy, and openpyxl
 
