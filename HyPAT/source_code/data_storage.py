@@ -1,5 +1,6 @@
 """ Keep track of important variables and calculations for HyPAT, especially the permeation estimates tab """
 import tkinter as tk
+from tkinter import ttk
 import numpy as np
 import pandas as pd
 import os
@@ -26,7 +27,7 @@ class Storage:
         self.melting_tempK = pd.read_excel(melt_filename, engine="openpyxl")
         self.melting_tempK.set_index("Material", inplace=True)
 
-        # Read the o-ring data off an excel sheet into a convenient dataframe.
+        # Read the o-ring data off an Excel sheet into a convenient dataframe.
         # (1/2, 1/4 VCR data comes from https://www.swagelok.com/downloads/webcatalogs/en/ms-01-24.pdf,
         # page 17 Silver Plated Nonretained)
         self.oring_filename = os.path.join('datafiles', 'o-ring_data.xlsx')
@@ -66,11 +67,11 @@ class Storage:
         self.sample_material.trace_add("write", self.update_properties)
 
         # Read the file for some default values
-        self.defaults_filename = os.path.join('datafiles', 'default_entry_vars.xlsx')
+        self.defaults_filename = os.path.join('datafiles', 'default_entry_vals.xlsx')
         self.defaults_info = pd.read_excel(self.defaults_filename, header=0)
 
         # Calibrated Leak Rate
-        self.cal_leak_rate = tk.DoubleVar(value=self.defaults_info["Calibrated Leak Rate [mol(D2) s^-1 Torr^-1]"][0])
+        self.cal_leak_rate = tk.DoubleVar(value=self.defaults_info["Calibrated Leak Rate [mol s^-1 Torr^-1]"][0])
 
         # Temperature input
         self.Tc = tk.DoubleVar(value=250)
@@ -82,28 +83,32 @@ class Storage:
         self.pP_T2_Pa = tk.DoubleVar()
 
         # secondary input
-        self.sV = tk.DoubleVar(value=self.defaults_info["Secondary Volume [cc]"][0])
+        self.sV = tk.DoubleVar(value=self.defaults_info["Secondary Side Volume [cc]"][0])
         self.t_accum = tk.DoubleVar(value=1.00)
         self.t_accum2 = tk.DoubleVar()
 
         # estimated secondary pressure
         self.t_L = tk.DoubleVar(value=0)
         self.Pr_D = tk.DoubleVar(value=0)
-        self.F_D2 = tk.DoubleVar(value=0)
-        self.F_D2_D = tk.DoubleVar(value=0)
-        self.x_sampxF_D2 = tk.DoubleVar(value=0)
-        self.Q_D2 = tk.DoubleVar(value=0)
+        self.flux = tk.DoubleVar(value=0)
+        self.flux_atoms = tk.DoubleVar(value=0)
+        self.x_sampx_flux = tk.DoubleVar(value=0)
+        self.Q = tk.DoubleVar(value=0)
         self.del_sP = tk.DoubleVar(value=0)
         self.del_sP_Pa = tk.DoubleVar(value=0)
         self.sP_final = tk.DoubleVar(value=0)
         self.sP_final2 = tk.DoubleVar(value=0)
-        self.DET_SS_QMS = tk.StringVar(value="NOPE")  # Check if detectable via secondary side QMS
-        self.p_mass_4 = tk.DoubleVar(value=0)
-        self.Det_PS_QMS = tk.StringVar(value="NOPE")  # Check if detectable via primary side QMS
-        self.Sat_PS_QMS = tk.StringVar(value="NOPE")  # Check if saturate primary side QMS
+        self.Det_CM = tk.StringVar(value="NOPE")  # Check if detectable via capacitance manometer
+        self.p_QMS = tk.DoubleVar(value=0)
+        self.Det_QMS = tk.StringVar(value="NOPE")  # Check if detectable via QMS
+        self.Sat_QMS = tk.StringVar(value="NOPE")  # Check if saturate the QMS
 
-        # tolerance used for finding steady state during permeation data analysis
-        self.ss_tol = tk.DoubleVar(value=1e-6)
+        # tolerance used for finding steady state during permeation data analysis and equilibrium during absorption d.a.
+        self.tol = tk.DoubleVar(value=1e-6)
+        # minimum number of seconds following t0 before finding a steady state or equilibrium
+        self.t_del = tk.DoubleVar(value=100)
+        # default number of data points used in determining leak, steady state, and/or equilibrium
+        self.gen_dp_range = tk.IntVar(value=30)
 
         # store the permeation calculations
         self.PermeationParameters = pd.DataFrame()
@@ -160,7 +165,7 @@ class Storage:
 
         # calculate permeability data
         col = df.columns
-        df[("Permeability", "P0 [mol(Q2) m^-1 s^-1 Pa^-0.5]")] = round_to_13(df[col[0]] * df[col[4]])
+        df[("Permeability", "P0 [mol m^-1 s^-1 Pa^-0.5]")] = round_to_13(df[col[0]] * df[col[4]])
         df[("Permeability", "E_P [kJ mol^-1]")] = round_to_13(df[col[1]] + df[col[5]])
         df[("Permeability", "min. temp. [K]")] = [max((df[col[2]][i], df[col[6]][i])) for i in range(len(df))]
         df[("Permeability", "max. temp. [K]")] = [min((df[col[3]][i], df[col[7]][i])) for i in range(len(df))]
@@ -194,9 +199,9 @@ class Storage:
         """ H mass transport properties depend on sample material """
         self.D0.set(self.data.loc[self.sample_material.get(), ("Diffusivity", "D0 [m^2 s^-1]")])
         self.E_D.set(self.data.loc[self.sample_material.get(), ("Diffusivity", "E_D [kJ mol^-1]")])
-        self.K0.set(self.data.loc[self.sample_material.get(), ("Solubility", "K0 [mol(Q2) m^-3 Pa^-0.5]")])
+        self.K0.set(self.data.loc[self.sample_material.get(), ("Solubility", "K0 [mol m^-3 Pa^-0.5]")])
         self.E_K.set(self.data.loc[self.sample_material.get(), ("Solubility", "E_K [kJ mol^-1]")])
-        self.P0.set(self.data.loc[self.sample_material.get(), ("Permeability", "P0 [mol(Q2) m^-1 s^-1 Pa^-0.5]")])
+        self.P0.set(self.data.loc[self.sample_material.get(), ("Permeability", "P0 [mol m^-1 s^-1 Pa^-0.5]")])
         self.E_P.set(self.data.loc[self.sample_material.get(), ("Permeability", "E_P [kJ mol^-1]")])
 
         # Update other values using new transport properties
@@ -233,7 +238,6 @@ class Storage:
             if parent_frame:
                 parent_frame.deiconify()
             svar = tvar.get()
-
         # Either set the entry to what it was prior to user entry (if user entry is not a number) or to the user entry
         if key in variable.keys():
             variable[key].delete(0, "end")
@@ -247,7 +251,7 @@ class Storage:
     def update_pressure_values(self, *args):
         """ On any user input, update the values of variables in
             the estimated secondary pressure section.
-            Variable names and equations copied from excel. This method reduced extra calls to the tk variables. """
+            Variable names and equations copied from Excel. This method reduced extra calls to the tk variables. """
         # todo update to make more readable
         C8 = self.x_samp2.get()
         C13 = self.D0.get()
@@ -268,12 +272,12 @@ class Storage:
         self.t_L.set(C8**2/6/(C13*np.exp(-1*C14*G8/C40)/np.sqrt(2)))
         self.Pr_D.set(C17*np.exp(-1*C18*G8/C40)/np.sqrt(2))
         G21 = self.Pr_D.get()
-        self.F_D2.set(G21*np.sqrt(G12)/C8)
-        G22 = self.F_D2.get()
-        self.F_D2_D.set(G22*C36*2)
-        self.x_sampxF_D2.set(G22*C8)
-        self.Q_D2.set(G22*C26)
-        G25 = self.Q_D2.get()
+        self.flux.set(G21 * np.sqrt(G12) / C8)
+        G22 = self.flux.get()
+        self.flux_atoms.set(G22 * C36 * 2)
+        self.x_sampx_flux.set(G22 * C8)
+        self.Q.set(G22 * C26)
+        G25 = self.Q.get()
         self.del_sP.set(G25/C39/G15*760)
         G26 = self.del_sP.get()
         self.del_sP_Pa.set(G26*C37)
@@ -283,22 +287,22 @@ class Storage:
         G28 = self.sP_final.get()
         # Detectable with capacitance manometer (>1E-4 Torr)
         if G28 > 0.0001:
-            self.DET_SS_QMS.set("YES")
+            self.Det_CM.set("YES")
         else:
-            self.DET_SS_QMS.set("NO")
+            self.Det_CM.set("NO")
 
-        self.p_mass_4.set(G25/C29)
-        G31 = self.p_mass_4.get()
-        # Detectable with primary side QMS (>1E-10 Torr)
+        self.p_QMS.set(G25 / C29)
+        G31 = self.p_QMS.get()
+        # Detectable with QMS (>1E-10 Torr)
         if G31 > 0.0000000001:
-            self.Det_PS_QMS.set("YES")
+            self.Det_QMS.set("YES")
         else:
-            self.Det_PS_QMS.set("NO")
-        # Saturate with primary side QMS  (>1E-6 Torr)
+            self.Det_QMS.set("NO")
+        # Saturate with QMS  (>1E-6 Torr)
         if G31 > 0.000001:
-            self.Sat_PS_QMS.set("SATURATE")
+            self.Sat_QMS.set("SATURATE")
         else:
-            self.Sat_PS_QMS.set("OK")
+            self.Sat_QMS.set("OK")
 
 
 class Widgets:
@@ -605,3 +609,29 @@ class FormatLabel(tk.Label):
     def _update_text(self, a, b, c):
         """update text in label when variable change value"""
         self["text"] = self._format.format(self._textvariable.get())
+
+
+class LoadingScreen(tk.Toplevel):
+    """  This class creates and adjusts a progress bar.
+         Majority of the text for this class obtained from
+         https://github.com/IdahoLabResearch/CDB_Analysis_Program/blob/main/CDB-AP_1.0/src/PlotModule.py """
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self.title('Loading')
+        self.update()
+
+    def add_progress_bar(self, num_of_files):
+        """ Create the progress bar and accompanying label"""
+        self.progress_bar = ttk.Progressbar(self, orient=tk.HORIZONTAL,
+                                            length=250, mode='determinate')
+        self.progress_bar.pack(pady=20)
+        self.file_num = num_of_files
+        self.label = tk.Label(self, text="0/{} files".format(self.file_num))
+        self.label.pack()
+        self.update()
+
+    def update_progress_bar(self, amount, i):
+        """ Update the progress bar and accompanying label"""
+        self.progress_bar['value'] += amount
+        self.label['text'] = "{}/{} files".format(i, self.file_num)
+        self.update()

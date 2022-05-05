@@ -16,10 +16,10 @@ else:
     MacButton = tk.Button
     BUTTON_WIDTH = 5  # account for the different button
     SCROLL_SCALE = 120  # Speed of scrolling in Materials frame
-from tkinter.filedialog import asksaveasfilename
+from tkinter.filedialog import asksaveasfilename, askopenfilename
 import os
 from .data_storage import Widgets
-from pandas import DataFrame
+from pandas import DataFrame, read_excel
 
 
 class Plots(tk.Frame):
@@ -33,6 +33,7 @@ class Plots(tk.Frame):
         self.columns = list(self.storage.data.columns)
         self.item = {}  # Container for storing whether a material is selected for plotting
         self.exp_data = DataFrame()  # Container for data received from permeation_plots
+        self.start = -1
 
         self.plotted_once = False
         # Keep track of changes in materials for use in setting the Materials' frame scroll region
@@ -170,6 +171,122 @@ class Plots(tk.Frame):
             self.b2.config(text='Enable Multiple Labels')  # Toggle the text so next time, it goes to the "if" part
         self.canvas.draw()
         self.toolbar.update()
+
+    def fit_to_Arrhenius_eqn(self, new_data=False):
+        """ Fit the diffusivity, solubility, and permeability derived at a variety of sample temperatures to an
+            Arrhenius fit to determine the pre-exponential factors and activation energies """
+        from scipy.optimize import curve_fit
+
+        # define data for analysis according to whether it comes from the permeation plots tab or a user-selected file
+        if self.exp_data.empty or self.b.config('text')[-1] == 'Add Experimental Data' or new_data:
+            # If there is nothing in the dataframe that holds data or if the button for displaying experimental data is
+            # toggled so that no data is currently displayed or if the button was clicked to select a new file...
+            fit_filename = askopenfilename(filetypes=[('Excel File', '*.xlsx')])
+            if not fit_filename:  # if no file is selected...
+                return
+            data = read_excel(fit_filename, header=0, engine="openpyxl")
+        else:
+            data = self.exp_data
+
+        # Read in variables
+        try:
+            T = data["Sample Temperature [K]"]
+            P_var = data["Permeability [mol m^-1 s^-1 Pa^-0.5]"]
+            P_unc = data["Permeability Uncertainty [mol m^-1 s^-1 Pa^-0.5]"]
+            D_var = data["Diffusivity [m^2 s^-1]"]
+            D_unc = data["Diffusivity Uncertainty [m^2 s^-1]"]
+            S_var = data["Solubility [mol m^-3 Pa^-0.5]"]
+            S_unc = data["Solubility Uncertainty [mol m^-3 Pa^-0.5]"]
+            R = 0.0083145  # kJ / (mol K)
+        except KeyError:  # This is expected if the file doesn't have the correct headers
+            tk.messagebox.showerror(title="Arrhenius Fit Error",
+                                    message='File must be formatted like the files generated'
+                                            ' by the "Export to Excel" button in the "Permeation Plots" tab."')
+            return
+
+        # The Arrhenius function
+        def f(temp, energy, variable):
+            return variable * np.exp(-energy / (R * temp))
+
+        # Get weighted fits
+        try:
+            P_fit, P_error = curve_fit(f, T, P_var, p0=[50, P_var[0]], sigma=P_unc)
+            P_uncert = np.sqrt(np.diag(P_error))
+            D_fit, D_error = curve_fit(f, T, D_var, p0=[50, D_var[0]], sigma=D_unc)
+            D_uncert = np.sqrt(np.diag(D_error))
+            S_fit, S_error = curve_fit(f, T, S_var, p0=[50, S_var[0]], sigma=S_unc)
+            S_uncert = np.sqrt(np.diag(S_error))
+        except ValueError as e:  # Mostly to handle blank cells, but also handles other errors
+            tk.messagebox.showerror(title="Arrhenius Fit Error", message="Value Error: " + str(e))
+            return
+        except Exception as e:  # in case of any other exception
+            # If you want to see the traceback as part of the error text, change the below value to true
+            want_traceback = False
+            if want_traceback:
+                import traceback
+                full_traceback = "\n" + traceback.format_exc()
+            else:
+                full_traceback = ""
+            tk.messagebox.showerror(title="Arrhenius Fit Error", message='Unknown Error with file. The following' +
+                                          ' exception was raised: "' + str(e) + '".' + full_traceback + '\n\n')
+            return
+
+        # Create popup window to display results
+        popup = tk.Tk()
+        popup.wm_title("Hydrogen Transport Properties Arrhenius Fit")
+        # Text for textbox
+        fit_texts = "Weighted Arrhenius fit of selected data.\n\n" + \
+                    "Pre-exponential factor for diffusivity: {:.2e} +/- {:.2e}".format(D_fit[1], D_uncert[1]) + \
+                    " [m\u00b2 s\u207b\u00b9]\n" + \
+                    "Activation energy for diffusivity: {:.2e} +/- {:.2e}".format(D_fit[0], D_uncert[0]) + \
+                    " [kJ mol\u207b\u00b9]\n\n" + \
+                    "Pre-exponential factor of solubility: {:.2e} +/- {:.2e}".format(S_fit[1], S_uncert[1]) + \
+                    " [mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]\n" + \
+                    "Activation energy for solubility: {:.2e} +/- {:.2e}".format(S_fit[0], S_uncert[0]) + \
+                    " [kJ mol\u207b\u00b9]\n\n" + \
+                    "Pre-exponential factor for permeability: {:.2e} +/- {:.2e}".format(P_fit[1], P_uncert[1]) + \
+                    " [mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]\n" + \
+                    "Activation energy for permeability: {:.2e} +/- {:.2e}".format(P_fit[0], P_uncert[0]) + \
+                    " [kJ mol\u207b\u00b9]"
+
+        # Create a textbox with the text in it
+        from tkinter import font
+        if platform.system() == 'Darwin':
+            twidth = 60
+        else:
+            twidth = 75
+        fittext = tk.Text(popup, font=font.nametofont("TkDefaultFont"), background=self.mats_frame.cget("background"),
+                          padx=10, pady=10, spacing2=10, width=twidth, height=11)
+        fittext.insert("insert", fit_texts)
+        fittext.configure(state="disabled")  # Turn off editing the text
+        fittext.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+
+        # Add the buttons
+        Arrhenius_button_frame = tk.Frame(popup)
+        Arrhenius_button_frame.grid(row=1, column=0)
+        b1 = tk.Button(master=Arrhenius_button_frame, text="Analyze Arrhenius for New Data",
+                       command=lambda loading=True: self.fit_to_Arrhenius_eqn(loading))
+        b1.grid(row=0, column=0)
+        b2 = tk.Button(master=Arrhenius_button_frame, text="Save to Excel",
+                       command=lambda pf=P_fit, pu=P_uncert, df=D_fit, du=D_uncert, sf=S_fit, su=S_uncert:
+                       self.save_Arrhenius_to_excel(pf, pu, df, du, sf, su))
+        b2.grid(row=0, column=1)
+
+    def save_Arrhenius_to_excel(self, P_fit, P_uncert, D_fit, D_uncert, S_fit, S_uncert):
+        """ Save the pre-exponential factors and activation energies determined via Arrhenius fit to Excel """
+        filename = asksaveasfilename(initialdir=os.path.dirname(__file__), defaultextension=".xlsx")
+        if filename != '':
+            data = {'Value': [D_fit[1], D_fit[0], S_fit[1], S_fit[0], P_fit[1], P_fit[0]],
+                    'Uncertainty': [D_uncert[1], D_uncert[0], S_uncert[1], S_uncert[0], P_uncert[1], P_uncert[0]],
+                    'Units': ['[m\u00b2 s\u207b\u00b9]', '[kJ mol\u207b\u00b9]',
+                              '[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]', '[kJ mol\u207b\u00b9]',
+                              '[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]', '[kJ mol\u207b\u00b9]']}
+
+            # Creates pandas DataFrame.
+            df = DataFrame(data, index=['Pre-exponential factor for diffusivity:', 'Activation energy for diffusivity:',
+                                        'Pre-exponential factor for solubility:', 'Activation energy for solubility:',
+                                        'Pre-exponential factor for permeability:', 'Activation energy for permeability:'])
+            df.to_excel(filename)
 
     def reset_scroll_region(self, event=None):
         """ Derives initial scroll region and adapts the scroll region to the addition or removal of materials"""
@@ -323,8 +440,12 @@ class Plots(tk.Frame):
         self.b2.pack(side="left", padx=1)
 
         # Add citation
-        self.b3 = tk.Button(master=self.toolbar, text="Reference", command=self.reference)
-        self.b3.pack(side="left", padx=1)
+        b3 = tk.Button(master=self.toolbar, text="Reference", command=self.reference)
+        b3.pack(side="left", padx=1)
+
+        # Facilitate an Arrhenius fit to experimental data
+        b4 = tk.Button(master=self.toolbar, text="Arrhenius Fit", command=self.fit_to_Arrhenius_eqn)
+        b4.pack(side="left", padx=1)
 
         self.toolbar.update()
 
@@ -558,7 +679,7 @@ class EditMaterials(tk.Toplevel):
         tk.Label(parent, text="Solubility").grid(row=0, column=4)
         self.add_entry(self, parent, variable=self.inputs, key="K0", text="K", innersubscript="0", innertext=":",
                        subscript="", tvar=self.K0,
-                       units=u"[mol(Q\u2082) m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]",  # mol(Q2) m^-3 Pa^-0.5
+                       units=u"[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]",  # mol m^-3 Pa^-0.5
                        row=1, column=3, in_window=True,
                        command=lambda tvar, variable, key, pf: self.calc_DKP(tvar, variable, key, pf))
         self.add_entry(self, parent, variable=self.inputs, key="E_K", text="E", innersubscript="K", innertext=":",
@@ -574,8 +695,8 @@ class EditMaterials(tk.Toplevel):
 
         tk.Label(parent, text="Permeability").grid(row=0, column=7)
         self.add_entry(self, parent, variable=self.inputs, key="P0", text="P", innersubscript="0", innertext=":",
-                       subscript="", tvar=self.P0,  # units=[mol(Q2) m^-1 s^-1 Pa^-0.5]
-                       units=u"[mol(Q\u2082) m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
+                       subscript="", tvar=self.P0,  # units=[mol m^-1 s^-1 Pa^-0.5]
+                       units=u"[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
                        row=1, column=6, in_window=True,
                        command=lambda tvar, variable, key, pf: self.calc_DKP(tvar, variable, key, pf))
         self.add_entry(self, parent, variable=self.inputs, key="E_P", text="E", innersubscript="P", innertext=":",
@@ -629,8 +750,8 @@ class EditMaterials(tk.Toplevel):
             # Solubility
             self.inputs['K0'].delete(0, "end")
             self.inputs['K0'].insert(0, "{}".format(self.storage.data.loc[
-                                                        material, ("Solubility", "K0 [mol(Q2) m^-3 Pa^-0.5]")]))
-            self.K0.set(self.storage.data.loc[material, ("Solubility", "K0 [mol(Q2) m^-3 Pa^-0.5]")])
+                                                        material, ("Solubility", "K0 [mol m^-3 Pa^-0.5]")]))
+            self.K0.set(self.storage.data.loc[material, ("Solubility", "K0 [mol m^-3 Pa^-0.5]")])
 
             self.inputs['E_K'].delete(0, "end")
             self.inputs['E_K'].insert(0, "{}".format(self.storage.data.loc[
@@ -650,8 +771,8 @@ class EditMaterials(tk.Toplevel):
             # Permeability
             self.inputs['P0'].delete(0, "end")
             self.inputs['P0'].insert(0, "{}".format(self.storage.data.loc[
-                                                        material, ("Permeability", "P0 [mol(Q2) m^-1 s^-1 Pa^-0.5]")]))
-            self.P0.set(self.storage.data.loc[material, ("Permeability", "P0 [mol(Q2) m^-1 s^-1 Pa^-0.5]")])
+                                                        material, ("Permeability", "P0 [mol m^-1 s^-1 Pa^-0.5]")]))
+            self.P0.set(self.storage.data.loc[material, ("Permeability", "P0 [mol m^-1 s^-1 Pa^-0.5]")])
 
             self.inputs['E_P'].delete(0, "end")
             self.inputs['E_P'].insert(0, "{}".format(self.storage.data.loc[
@@ -856,12 +977,12 @@ class EditMaterials(tk.Toplevel):
             if self.material.get() in self.storage.data.index:
                 c_message = "Edit the recorded properties of {} in the source file for the materials?".format(
                     self.material.get()) + \
-                            '\n \u2022 Selecting "yes" will change them here and in the original excel sheet.' + \
+                            '\n \u2022 Selecting "yes" will change them here and in the original Excel sheet.' + \
                             '\n \u2022 Selecting "no" will change them here but not in the original spreadsheet.' + \
                             '\n \u2022 Selecting "cancel" will return you to the Add or Edit Materials window.'
             else:
                 c_message = "Add {} to the source file for the materials?".format(self.material.get()) + \
-                            '\n \u2022 Selecting "yes" will add it here and in the original excel sheet.' + \
+                            '\n \u2022 Selecting "yes" will add it here and in the original Excel sheet.' + \
                             '\n \u2022 Selecting "no" will add it here but not in the original spreadsheet.' + \
                             '\n \u2022 Selecting "cancel" will return you to the Add or Edit Materials window.'
             ans = tk.messagebox.askyesnocancel(
@@ -915,7 +1036,7 @@ class EditMaterials(tk.Toplevel):
         ans = tk.messagebox.askyesnocancel(
             title="Confirmation",
             message='Do you want to also remove {} from the source file for materials?'.format(self.material.get()) +
-                    '\n \u2022 Selecting "yes" will remove it from here and the original excel sheet.' +
+                    '\n \u2022 Selecting "yes" will remove it from here and the original Excel sheet.' +
                     '\n \u2022 Selecting "no" will remove it from here but not the original spreadsheet.' +
                     '\n \u2022 Selecting "cancel" will return you to the Add or Edit Materials window.')
 
