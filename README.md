@@ -80,7 +80,7 @@ Chase Taylor
 
 Joey Wakins (https://github.com/joeymwatkins) built most of the original functionality. George Evans (https://github.com/GeorgeEvans0) cleaned up errors, made various visual fixes, and added functionality. Thomas Fuerst (https://github.com/FuerstT) was the primary supervisor over this project, with Chase Taylor (https://github.com/taylchas) as secondary supervisor.
 
-Work supported through the INL Laboratory Directed Research & Development (LDRD) Program under DOE Idaho Operations Office Contract DE-AC07-05ID14517
+This work was prepared for the U.S. Department of Energy, Office of Fusion Energy Sciences, under the DOE Idaho Field Office contract number DE-AC07–05ID14517.
 
 ## License
 
