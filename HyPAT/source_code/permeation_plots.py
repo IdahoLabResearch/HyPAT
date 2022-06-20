@@ -640,7 +640,7 @@ class PermeationPlots(tk.Frame):
         self.needed_cols.append(self.l2n(pv_wb['MiscInfo']['B2'].value))
         self.converters_dict[self.needed_cols[-1]] = \
             lambda input, multi=pv_wb['MiscInfo']['B3'].value, add=pv_wb['MiscInfo']['B4'].value: \
-            self.unit_conversion(input, multi, add)
+            round(self.unit_conversion(input, multi, add))
 
         # Variable for which row in Excel sheet to start obtaining data from (0-indexed)
         self.starting_row = pv_wb['MiscInfo']['C2'].value
@@ -1969,9 +1969,10 @@ class PPSettingsHelp(tk.Toplevel):
                                   "are only applied to the time data if the data is composed of floats.")
         tdt["PrimP [Pa]: text"].insert("insert", "Primary side pressure.")
         tdt["SecP [Pa]: text"].insert("insert", "Secondary side pressure.")
-        tdt["Isolation Valve [1/0]: text"].insert("insert", "The data describing whether the isolation valve is open " +
-                                                            "(1) or closed (0). Start of permeation is measured from " +
-                                                            "when the valve first goes from closed to open.")
+        tdt["Isolation Valve [1/0]: text"].insert("insert", "The data describing whether the isolation valve is " +
+                                                            "closed (~0) or open (not ~0). Start of permeation is " +
+                                                            "measured from when the valve first goes from closed to " +
+                                                            "open.")
         tdt["Starting Row: text"].insert("insert", "The row at which the program starts reading data from the Excel " +
                                                    "sheet (0-indexed).")
         tdt["GasT [\u2103]: text"].insert("insert", "The thermocouples that measure the temperature of the gas. " +

@@ -238,7 +238,7 @@ class InputForm(tk.Frame):
     def create_pressure_frame(self, parent, row, column):
         """ Sets up frame for displaying predicted values """
         box4 = tk.LabelFrame(parent, text="ESTIMATED SECONDARY PRESSURE BY REFERENCE PERMEABILITY DATA", fg="blue")
-        self.add_text(box4, text="Estimated lag time: t", subscript="L",
+        self.add_text(box4, text="Estimated time-lag: t", subscript="L",
                       units="[sec]", tvar=self.storage.t_L, row=0)
         self.add_text(box4, text="Estimated molecular permeability: Pr", subscript=" ",
                       # units="[mol m^-1 s^-1 Pa^-0.5]"
@@ -291,7 +291,7 @@ class InputForm(tk.Frame):
     def create_final_output_frame(self, row, column):
         """ Sets up frame for displaying final output """
         parent = tk.LabelFrame(self, text="FINAL OUTPUT", fg="blue", bd=10)
-        self.add_text(parent, text="Estimated lag time: t", subscript="L",
+        self.add_text(parent, text="Estimated time-lag: t", subscript="L",
                       units="[sec]", tvar=self.storage.t_L, row=0)
         self.add_text(parent, text="Estimated molecular permeation rate: Q", subscript="", subsubscript="",
                       units=u"[mol s\u207b\u00b9]",  # "[mol s^-1]",

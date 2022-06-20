@@ -56,8 +56,8 @@ class Application(tk.Tk):
     def load_pages(self):
         """ Load the GUI with the pages containing the calculations """
         front_page = permeation_estimates.InputForm(self.notebook, self.storage)  # Permeation estimates
-        overview_plots_page = overview_plots.Plots(self.notebook, self.storage)  # Theoretical plots (Overview)
         experiment_plots_page = permeation_plots.PermeationPlots(self.notebook, self.storage)  # Permeation plots
+        overview_plots_page = overview_plots.Plots(self.notebook, self.storage)  # Theoretical plots (Overview)
         self.notebook.add(front_page, text="Permeation Estimates")
-        self.notebook.add(overview_plots_page, text="Overview Plots")
         self.notebook.add(experiment_plots_page, text="Permeation Plots")
+        self.notebook.add(overview_plots_page, text="Overview Plots")

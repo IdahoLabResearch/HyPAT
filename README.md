@@ -1,8 +1,8 @@
 # Hydrogen Permeation Analysis Tool (HyPAT) 
 ## About 
-The Hydrogen Permeation Analysis Tool (HyPAT) is an application that streamlines data analysis for gas-driven permeation through metals using the buildup in closed volume method to measure the following hydrogen transport properties: permeability, diffusivity, and solubility. A built-in literature database provides direct comparison for experimental results as well as timescale and permeation rate estimates for experiment preparation based on the user-input parameters. 
+The Hydrogen Permeation Analysis Tool (HyPAT) is an application that streamlines data analysis for gas-driven permeation through metals using the build-up in closed volume method to measure the following hydrogen transport properties: permeability, diffusivity, and solubility. A built-in literature database provides direct comparison for experimental results as well as timescale and permeation rate estimates for experiment preparation based on the user-input parameters. 
 ## Description
-The Hydrogen Permeation Analysis Tool (HyPAT) provides a convenient application that allows the user to prepare experiment estimates, quickly analyze multiple data files, and compare results to literature values based on gas-driven permeation through metals using the buildup method.
+The Hydrogen Permeation Analysis Tool (HyPAT) provides a convenient application that allows the user to prepare experiment estimates, quickly analyze multiple data files, and compare results to literature values based on gas-driven permeation through metals using the build-up method.
 
 Features:
 
@@ -16,9 +16,11 @@ Features:
 
 ###  Usage: Data Analysis with “Permeation Plots" Tab
 
-This tab calculates the hydrogen transport properties permeability, diffusivity, and solubility from experimental permeation data using pressure buildup in a secondary side closed volume while allowing for batchwise data analysis of multiple files. The required user inputs and associated errors are highlighted in yellow. Thickness (mm) is the only required sample property. The experimental apparatus parameters are the secondary side volume (m<sup>3</sup>) and permeation surface area (m<sup>2</sup>). The tolerance for determining a steady state is also adjustable. The tolerance is the value at which the second derivative of the secondary pressure with respect to time (∂<sup>2</sup>P/∂t<sup>2</sup>) is approximated to be zero.
+This tab calculates the hydrogen transport properties permeability, diffusivity, and solubility from experimental permeation data using pressure build-up in a secondary side closed volume while allowing for batchwise data analysis of multiple files. The required user inputs and associated errors are highlighted in yellow. Thickness (mm) is the only required sample property. The experimental apparatus parameters are the secondary side volume (m<sup>3</sup>) and permeation surface area (m<sup>2</sup>). 
 
-Click the “Choose folder” button to select the folder containing experimental data. The graphs will then self-populate. Note: Only .xls and .xlsx files are processed by the program; all other files are ignored. HyPAT assumes data is organized such that the data of each instrument (or set of instruments) has its own column in the excel sheet without a header.
+Clicking the “Steady State Variables” button immediately beneath the top-right plot allows the user to edit the tolerance for determining steady state, the delay until steady state, and the number of points used to find the leak rate and steady state rate. The tolerance is the value at which the second derivative of the secondary side pressure with respect to time (∂^2 P/∂t^2) is approximated to be zero. The delay until steady state is the minimum number of seconds to wait after the isolation valve is opened until initiating analysis to detect steady state. The leak range is the number of data points prior to opening the isolation valve used to determine the leak rate and initial values. The steady state range is the number of data points used to determine final values and when the permeation rate has reached a steady state. 
+
+Click the “Choose folder” button to select the folder containing experimental data. The graphs will then self-populate. Note: Only XLS and XLSX files are processed by the program; all other files are ignored. HyPAT assumes data is organized such that the data of each instrument (or set of instruments) has its own column in the Excel sheet without a header.
 
 The bottom left graph displays the permeability calculated from each data set plotted against temperature. Use the “Current Measurement” drop-down menu to change to the diffusivity, solubility, or flux calculated from each file plotted against temperature (or pressure, in the case of flux).
 
@@ -26,8 +28,8 @@ Also visible are a pressure versus time plot, a permeability versus time plot, a
 
 By clicking the “Settings” button, you gain the ability to edit some of how the program processes the data. Specifically, the following parameters are editable:
 
-* The column of the excel sheet from which data is read for each instrument,
-* The row at which the program starts reading data from the excel sheet,
+* The columns of the Excel sheet from which the program reads data for each instrument,
+* The row at which the program starts reading data from the Excel sheet,
 * The number of thermocouples used to measure the gas temperature,
 * Conversion factors for each instrument to allow the user to update for appropriate unit conversions,
 * Constant and proportional errors of each instrument.
@@ -35,6 +37,8 @@ By clicking the “Settings” button, you gain the ability to edit some of how 
 ### Usage: Comparison with Literature Values with "Overview Plots" Tab
 
 The “Overview Plots” tab allows quick comparison to literature values of diffusivity, solubility, and permeability taken from M. Shimada (2020). The user can select and remove materials displayed in these overview plots using the materials column. Materials can be added to, modified, or removed from the database with the “Add/Edit Material” button.
+
+The button labelled “Arrhenius Fit” calculates the pre-exponential factors and activation energies of diffusivity, solubility, and permeability for a material.
 
 Reference:
 
@@ -44,9 +48,9 @@ M. Shimada, “Tritium Transport in Fusion Reactor Materials” in Comprehensive
 
 This tab provides predictions for permeation experiments based on specified user inputs. The required user inputs are highlighted in yellow. The sample properties are thickness (mm) and material. The experimental apparatus parameters are O-ring/sealing method, calibrated leak rate (mol s<sup>-1</sup> Torr<sup>-1</sup>), secondary side volume (cc), and accumulation time (hr). The specific test parameters are sample temperature (°C) and primary side pressure (Torr).
 
-The results reported in the "FINAL OUTPUT” section include estimated time lag, permeation rate, and final secondary pressure.
+The results reported in the "FINAL OUTPUT” section include estimated time-lag (s), molecular permeation rate (mol s<sup>-1</sup>), and final secondary side pressure (Torr).
 
-By clicking the “Settings” button, O-rings can be added, edited, or removed. The default values for calibrated leak rate and secondary side volume can also be edited there. The options for sample material can be edited using the “Add/Edit Material” button on the Overview Plots tab.
+By clicking the “Settings” button, O-rings can be added, edited, or removed. The default values for calibrated leak rate and secondary side volume can also be edited there. The options for sample material can be edited using the “Add/Edit Material” button on the "Overview Plots" tab.
 
 ## Installation Instructions
 
