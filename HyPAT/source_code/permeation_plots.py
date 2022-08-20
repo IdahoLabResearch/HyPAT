@@ -12,10 +12,10 @@ import matplotlib.pyplot as plt
 import os
 from .data_storage import Widgets, LoadingScreen
 from scipy.optimize import curve_fit
-import mplcursors  # adds the hover over feature. This library has good documentation
+import mplcursors  # adds the hover-over feature to labels. This library has good documentation
 import openpyxl
 import platform  # allows for Mac vs Windows adaptions
-# make certain warnings appear as errors so they can be caught using a try/except clause
+# make certain warnings appear as errors, allowing them to be caught using a try/except clause
 import warnings
 from scipy.optimize import OptimizeWarning
 warnings.simplefilter("error", OptimizeWarning)
@@ -54,7 +54,7 @@ class PermeationPlots(tk.Frame):
         self.add_entry = self.widgets.add_entry
         self.add_entry3 = self.widgets.add_entry3
 
-        # to get 2 rows over three we need two more frames
+        # to get 2 rows over 3, we need two more frames
         self.top_frame = tk.Frame(self, bd=10)
         self.top_frame.grid(row=0, column=0, sticky="nsew")
         self.bottom_frame = tk.Frame(self, bd=10)
@@ -66,6 +66,7 @@ class PermeationPlots(tk.Frame):
         self.inputs = {}
 
         self.directory = ""
+        self.loading_data = False  # Keep track of whether data is currently being loaded by this tab
         self.refreshing = False  # If false, ask for a directory when select_file gets called
         self.file_type = ""
         self.time_type = 0  # Used to determine which converter function to use for the time instrument
@@ -88,8 +89,8 @@ class PermeationPlots(tk.Frame):
         self.volume = tk.DoubleVar(value=(self.storage.defaults_info["Secondary Side Volume [cc]"][0]) * 10 ** -6)
         self.ss_tol = tk.DoubleVar(value=self.storage.tol.get())  # Tolerance for finding the steady state
         self.ss_t_del = tk.DoubleVar(value=self.storage.t_del.get())  # Minimum time after t0 before looking for ss
-        self.leak_range = {}  # Dictionary for holding the range used in determining leaks for each file
-        self.ss_range = {}  # Dictionary for holding the range used in determining leaks for each file
+        self.leak_range = {}  # Dict for holding the range used in finding leaks and initial variables for each file
+        self.ss_range = {}  # Dict for holding the range used in finding ss and ss variables for each file
         self.gen_leak_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to determine leak over
         self.gen_ss_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to determine ss over
         # default area is the inner area of the default O-ring
@@ -107,9 +108,9 @@ class PermeationPlots(tk.Frame):
         # permeation variables
         self.t0 = {}  # time when isolation valve opens (s)
         self.tss = {}  # time when steady state pressure is achieved (s)
-        self.pleak = {}  # linear fit for leak rate
-        self.pss = {}  # linear fit for steady state
-        self.Prate = {}  # steady state permeation rates (pss minus pleak)
+        self.pleak_lf = {}  # linear fit for leak rate
+        self.pss_lf = {}  # linear fit for steady state
+        self.Prate = {}  # steady state permeation rates (pss_lf minus pleak_lf)
         self.Prate_err = {}
         self.F = {}  # flux
         self.F_err = {}
@@ -136,7 +137,7 @@ class PermeationPlots(tk.Frame):
         self.D_time = {}  # time over which D is calculated
         self.lhs = {}  # for the diffusivity optimization comparison
         self.rhs = {}
-        self.rhs_cf = {}  # curve_fit (for debugging)
+        self.rhs_cf = {}  # curve_fit
 
         # solubility variables
         self.Ks = {}
@@ -157,33 +158,33 @@ class PermeationPlots(tk.Frame):
         # add frames and buttons to view important variables
 
         entry_row = 1
-        self.add_entry3(self, self.frame, variable=self.inputs, key="sl", text="Sample Thickness: sl",
-                        subscript="", tvar1=self.sample_thickness, tvar2=self.sample_thickness_err,
+        self.add_entry3(self, self.frame, variable=self.inputs, key="ls", text="Sample Thickness: l",
+                        subscript="s", tvar1=self.sample_thickness, tvar2=self.sample_thickness_err,
                         update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
                         units="[mm]", row=entry_row)
 
         self.add_entry3(self, self.frame, variable=self.inputs, key="A_perm", text="Permeation Surface Area: A",
                         subscript="perm", tvar1=self.A_perm, tvar2=self.A_perm_err,
                         update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
-                        units=u"[m\u00b2]", row=entry_row + 1)  # "[m^2]"
+                        units="[m\u00b2]", row=entry_row + 1)  # "[m^2]"
 
-        self.add_entry3(self, self.frame, variable=self.inputs, key="V", text="Secondary Side Volume:",
-                        subscript="", tvar1=self.volume, tvar2=self.volume_err, units=u"[m\u00B3]",  # "[m^3]"
+        self.add_entry3(self, self.frame, variable=self.inputs, key="V", text="Secondary Side Volume: V",
+                        subscript="sec", tvar1=self.volume, tvar2=self.volume_err, units="[m\u00B3]",  # "[m^3]"
                         update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
                         row=entry_row + 2)
 
         label_row = 4
-        self.add_text2(self.frame, text="Steady State Permeation Rate:", subscript="", tvar1=self.Prate_label,
+        self.add_text2(self.frame, text="Permeation Rate: dP/dt", subscript="", tvar1=self.Prate_label,
                        tvar2=self.Prate_err_label, units="[Pa s\u207b\u00b9]", row=label_row)
-        self.add_text2(self.frame, text="Molar Flux:", subscript="", tvar1=self.F_label, tvar2=self.F_err_label,
-                       units=u"[mol m\u207b\u00b2 s\u207b\u00b9]", row=label_row + 1)  # "[mol/m^2 s]"
-        self.add_text2(self.frame, text="Permeability:", subscript="", tvar1=self.Phi_label, tvar2=self.Phi_err_label,
-                       units=u"[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",   # "[mol/msPa^0.5]"
+        self.add_text2(self.frame, text="Molar Flux: J", subscript="inf", tvar1=self.F_label, tvar2=self.F_err_label,
+                       units="[mol m\u207b\u00b2 s\u207b\u00b9]", row=label_row + 1)  # "[mol/m^2 s]"
+        self.add_text2(self.frame, text="Permeability: \u03A6", subscript="", tvar1=self.Phi_label, tvar2=self.Phi_err_label,
+                       units="[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",   # "[mol/msPa^0.5]"
                        row=label_row + 2)
-        self.add_text2(self.frame, text="Diffusivity:", subscript="", tvar1=self.D_label, tvar2=self.D_err_label,
-                       units=u"[m\u00b2 s\u207b\u00b9]", row=label_row + 3)
-        self.add_text2(self.frame, text="Solubility:", subscript="", tvar1=self.K_label, tvar2=self.K_err_label,
-                       units=u"[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]", row=label_row + 4)
+        self.add_text2(self.frame, text="Diffusivity: D", subscript="", tvar1=self.D_label, tvar2=self.D_err_label,
+                       units="[m\u00b2 s\u207b\u00b9]", row=label_row + 3)
+        self.add_text2(self.frame, text="Solubility: K", subscript="s", tvar1=self.K_label, tvar2=self.K_err_label,
+                       units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]", row=label_row + 4)
 
         button_row = 10
         self.b0 = ttk.Button(self.frame, text='Choose folder', command=self.select_file)
@@ -250,7 +251,7 @@ class PermeationPlots(tk.Frame):
         self.ax2_title = "Permeability vs Time"
         self.ax2_xlabel = "Time (s)"
         self.ax2_ylabel = r"Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
-        self.ax22_ylabel = u"Sample Temperature (\u2103)"
+        self.ax22_ylabel = "Sample Temperature (\u2103)"
         self.fig2, self.ax2, self.canvas2, self.toolbar2 = self.add_plot(self.bottom_frame,
                                                                          xlabel=self.ax2_xlabel,
                                                                          ylabel=self.ax2_ylabel,
@@ -311,8 +312,10 @@ class PermeationPlots(tk.Frame):
         "Currently Constrained Layout is experimental. The behaviour and API are subject to change, 
         or the whole functionality may be removed without a deprecation period..."
         """
+        # todo Update this to the official layout feature. See:
+        #      https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html
         fig, ax = matplotlib.pyplot.subplots(constrained_layout=True)
-        # If something goes wrong with contrained_layout, comment out the above line and uncomment the two lines below
+        # If something goes wrong with constrained_layout, comment out the above line and uncomment the two lines below
         # fig = Figure()
         # ax = fig.add_axes(axes)  # [left, bottom, width, height]
 
@@ -342,23 +345,40 @@ class PermeationPlots(tk.Frame):
 
         return fig, ax, canvas, toolbar
 
-    def refresh_graphs(self):
+    def refresh_graphs(self, loading_warning=True):
         """ Sets self.refreshing = True so that, when select_file is called, HyPAT doesn't ask for a directory.
             Calls select_file, which reloads all the data using filenames previously uploaded and plots them """
+        if self.loading_data and loading_warning:
+            proceed = tk.messagebox.askyesno(title="Loading Data",
+                                             message="Warning: Data is currently loading. Proceeding may cause " +
+                                                     "unexpected or erroneous results. Do you wish to proceed?")
+            if not proceed:
+                return
         self.refreshing = True
         self.select_file()
 
     def select_file(self):
         """ Facilitates loading data and plotting the permeation tab plots """
+        if self.loading_data and not self.refreshing:
+            proceed = tk.messagebox.askyesno(title="Loading Data",
+                                             message="Warning: Data is currently loading. Proceeding may cause " +
+                                                     "unexpected or erroneous results. Do you wish to proceed?")
+            if not proceed:
+                return
+
         # If select_file was called because the user is choosing a new folder (if self.refreshing=False),
         # then ask them for a directory from which to get data. If not, set self.refreshing back to false and
         # continue with the previously loaded data
         if not self.refreshing:
-            self.directory = askdirectory(initialdir=os.path.dirname(__file__))
+            # Save to a temp variable in case user cancels loading a new folder
+            temp_dir = askdirectory(initialdir=os.path.dirname(__file__))
+            if temp_dir:
+                self.directory = temp_dir
         else:
             self.refreshing = False
+            temp_dir = True  # temp_dir is truthy unless the user cancels loading the data
 
-        if self.directory:
+        if self.directory and temp_dir:
             self.options = [file for file in os.listdir(self.directory) if (os.path.splitext(file)[1] == '.xls' or
                                                                             os.path.splitext(file)[1] == '.xlsx')]
             if not self.options:
@@ -366,8 +386,25 @@ class PermeationPlots(tk.Frame):
                                           message="Please select a folder with data.")
                 return
 
+            self.loading_data = True
+            try:
+                self.get_persistent_vars()  # Loads variables from a data file for use in analysis
+            except Exception as e:
+                # If you want to see the traceback as part of the error text, change the below value to true
+                want_traceback = False
+                if want_traceback:
+                    import traceback
+                    full_traceback = "\n" + traceback.format_exc()
+                else:
+                    full_traceback = ""
+
+                showerror('Loading Error', 'Unknown Error while obtaining persistent variables. No files were' +
+                          ' processed. The following exception was raised: "' + str(e) + '".' +
+                          full_traceback + '\n\n')
+                self.loading_data = False
+                return
+
             self.datafiles.clear()  # Clear the dictionary to avoid old data points appearing in PDK plot
-            self.get_persistent_vars()  # Loads data from the permeation input file-format file
             self.error_texts = ""  # Reset error_texts each time a folder is loaded
 
             # Create the progress bar
@@ -377,9 +414,11 @@ class PermeationPlots(tk.Frame):
 
             # loop through files, test to make sure they will work, then process them
             i = 0
+            i2 = 0
             while i < len(self.options):  # While loop required so that files don't get skipped when a pop is needed
                 filename = self.options[i]
                 i += 1
+                i2 += 1
 
                 # check if the file is good
                 status = self.check_file(os.path.join(self.directory, filename))
@@ -391,13 +430,19 @@ class PermeationPlots(tk.Frame):
                     self.days = -1
                     self.extra_time = 0
 
-                    try:  # Catch most other errors than can happen while processing the data
+                    try:  # Catch most other errors that can happen while processing the data
                         self.datafiles[filename] = self.extract_data(os.path.join(self.directory, filename))
 
                         # Find row number where the Isolation Valve is 1st opened after being closed (aka, the start of
                         # the experiment). Done in a try/except clause in case no opening is registered
                         try:
-                            self.t0[filename] = np.where((self.datafiles[filename])['Isolation Valve'] == 0)[0][-1] + 1
+                            _t0 = np.where((self.datafiles[filename])['Isolation Valve'] == 0)[0]
+                            closed = np.where(np.diff(_t0) > 1)[0]
+                            if not closed.any():  # if the isolation valve wasn't closed again after being opened...
+                                # ...set t0 to be the data point after the last zero in the file
+                                self.t0[filename] = _t0[-1] + 1
+                            else:  # else, set t0 to be the data point after the last zero before the valve is opened
+                                self.t0[filename] = _t0[closed[0]] + 1
                         except IndexError:
                             self.error_texts += "Loading Error with file " + filename + \
                                                 ". Incorrect Isolation Valve format.\n\n"
@@ -419,15 +464,25 @@ class PermeationPlots(tk.Frame):
 
                         self.error_texts += "Unknown Error with file " + filename + '. The following exception was' + \
                                             ' raised: "' + str(e) + '".' + full_traceback + '\n\n'
-                        self.datafiles.pop(filename)
+                        try:
+                            self.datafiles.pop(filename)
+                        except KeyError:
+                            self.error_texts += "Note: " + filename + ' was never successfully loaded.' + '\n\n'
                         status = False
 
                 if not status:  # If something is wrong with the file or with analyzing the file
                     self.options.pop(self.options.index(filename))
                     i -= 1
                 # Update the progress bar
-                pb.update_progress_bar(100//pb_len, i)
-
+                try:
+                    pb.update_progress_bar(100 // pb_len, i2)
+                except tk.TclError:  # if the user closed the progress bar window
+                    # clear out remaining files
+                    while i < len(self.options):
+                        self.options.pop(i)
+                    tk.messagebox.showwarning("Loading Canceled", "Loading has been canceled.")
+                    self.error_texts += "Warning: Not all files in selected folder were analyzed.\n\n"
+                    break
             pb.destroy()  # Close the progress bar
 
             self.update_dataframe()
@@ -456,6 +511,7 @@ class PermeationPlots(tk.Frame):
                 err_scrollbar = tk.Scrollbar(popup, command=errortext.yview)
                 err_scrollbar.grid(row=0, column=1, sticky="nsew")
                 errortext.configure(wrap=tk.WORD, yscrollcommand=err_scrollbar.set)
+        self.loading_data = False
 
     def check_file(self, filename):
         """ method to check Excel files for any problems, and to move on if there is an issue.
@@ -511,16 +567,23 @@ class PermeationPlots(tk.Frame):
                  "Solubility Uncertainty [mol m^-3 Pa^-0.5]": self.Ks_err[filename],
                  }, index=[filename]
             ))
-        self.storage.PermeationParameters = df
+        self.storage.TransportParameters = df
 
     def export_data(self):
         """ Loads dataframe containing the information for each material into an Excel sheet """
+        if self.loading_data:
+            proceed = tk.messagebox.askyesno(title="Loading Data",
+                                             message="Warning: Data is currently loading. Proceeding may cause " +
+                                                     "unexpected or erroneous results. Do you wish to proceed?")
+            if not proceed:
+                return
+
         if self.current_file.get() != "No files yet":
 
             save_filename = asksaveasfilename(initialdir=os.path.dirname(__file__), initialfile="test",
                                               defaultextension="*.xlsx")
             if save_filename != '':
-                self.storage.PermeationParameters.to_excel(save_filename)
+                self.storage.TransportParameters.to_excel(save_filename)
 
         else:
             showerror(message='Please load data first.')
@@ -534,36 +597,58 @@ class PermeationPlots(tk.Frame):
 
     def unit_conversion(self, value, multi, add):  # todo This seems to do things cell by cell. Maybe find another way?
         """ Returns the linearly adjusted input according to multi and add """
-        return float(value) * multi + add
+        if value == "":
+            return float("NaN")
+        try:
+            new_val = float(value) * multi + add
+        except ValueError:
+            self.error_texts += "Data Extraction Warning. The following was submitted to HyPAT for conversion" + \
+                            " into seconds: " + str(value) + ". This triggered a ValueError. The dataframe " + \
+                            " location corresponding to this term has been set to NaN. No further information" \
+                            " is available.\n\n"
+            return float("NaN")
+        return new_val
 
     def get_seconds(self, date_time):
         """ Converts a datetime variable into seconds (excluding the date) """
-        # Check to see if the day has changed between one cell and the next
-        if self.days == -1:  # Equals -1 iff this is the first term in the column being loaded. Resets with each file
+        if self.days == -1:  # Equals -1 if this is the first term in the column being loaded. Resets with each file
             self.this_date_time = date_time
             self.init_time = date_time.hour * 3600 + date_time.minute * 60 + date_time.second + \
                 date_time.microsecond * 10 ** -6
         last_date_time = self.this_date_time
         self.this_date_time = date_time
-        self.days = round(date_time.day - last_date_time.day, 14)  # round to avoid numerical errors
-        # If the day has changed, store the time that has passed in a new variable to be added to the new time
-        if self.days != 0:
-            self.extra_time += last_date_time.hour * 3600 + last_date_time.minute * 60 + last_date_time.second + \
-                               last_date_time.microsecond * 10 ** -6
-
-        return date_time.hour * 3600 + date_time.minute * 60 + date_time.second + date_time.microsecond * 10 ** -6 + \
-            self.extra_time - self.init_time
+        try:
+            # Check to see if the day has changed between one cell and the next
+            self.days = round(date_time.day - last_date_time.day, 5)  # round to avoid precision errors
+            # If the day has changed, store the time that has passed in a new variable to be added to the new time
+            if self.days != 0:
+                self.extra_time += 86400
+            value = date_time.hour * 3600 + date_time.minute * 60 + date_time.second + date_time.microsecond * 10 ** -6 + \
+                self.extra_time - self.init_time
+        except AttributeError:
+            # This is expected if the cell is blank or otherwise not a datetime. NaNs sometimes trigger other errors
+            # that HyPAT is more ready to handle than this AttributeError
+            value = float("NaN")
+        return value
 
     def convert_time(self, time_term, multi, add):
         """ Checks to see if the time-instrument's data is formatted in datetime or cumulative time passed and sets the
             converter function accordingly """
-        if self.time_type == 0:  # Equals 0 iff this is the first term in the column being loaded. Resets with each file
+        if time_term == "":
+            return float("NaN")
+        if self.time_type == 0:  # Resets to zero before each file is loaded
             try:
                 dummy = float(time_term)
                 self.time_type = 1
             except TypeError:
                 # TypeError is expected if time_term is a datetime
                 self.time_type = 2
+            except ValueError:
+                self.error_texts += "Data Extraction Warning. The following was submitted to HyPAT for conversion" + \
+                                " into seconds: " + str(time_term) + ". This triggered a ValueError. The dataframe " + \
+                                " location corresponding to this term has been set to NaN. No further information" \
+                                " is available.\n\n"
+                return float("NaN")
         if self.time_type == 1:
             # If the time is in cumulative time passed format, do a linear transform according to multi and add
             return self.unit_conversion(time_term, multi, add)
@@ -644,39 +729,56 @@ class PermeationPlots(tk.Frame):
 
         # Variable for which row in Excel sheet to start obtaining data from (0-indexed)
         self.starting_row = pv_wb['MiscInfo']['C2'].value
+        # Variable for how many rows at the end of the Excel sheet to not read (0-indexed)
+        self.footer_rows = pv_wb['MiscInfo']['D2'].value
 
     def n_of_cols(self, filename):
         """ Given a .xls or .xlsx filename, return the number of columns in that file"""
         if self.file_type == ".xls":
             # This is faster for large files, but isn't working on .xlsx file formats
-            df = pd.read_csv(filename, sep='\t', header=None, skiprows=self.starting_row)
+            df = pd.read_csv(filename, sep='\t', header=None, skiprows=self.starting_row, skipfooter=self.footer_rows)
         else:  # assume .xlsx file
             # openpyxl supports .xlsx file formats. According to documentation, engine=None should
             # support xlsx and xls, but it doesn't seem to work for xls as of 11/10/2021
-            df = pd.read_excel(filename, header=None, engine="openpyxl", skiprows=self.starting_row)
+            df = pd.read_excel(filename, header=None, engine="openpyxl", skiprows=self.starting_row,
+                               skipfooter=self.footer_rows)
         return len(df.columns)
 
     def extract_data(self, filename):
         """ Extract data from given file """
-        # Attempt to extract data from the file. If it fails because of a ValueError, enter into a while loop that
-        # that can help the user fix the problem so the program can proceed
+        # Attempt to extract data from the file. If it fails because of a ValueError or IndexError, enter into a while
+        # loop that can help the user fix the problem so the program can proceed
         try:
             if self.file_type == ".xls":
                 # This is faster for large files, but isn't working on .xlsx file formats
                 Data = pd.read_csv(filename, sep='\t', header=None, usecols=self.needed_cols,
-                                   converters=self.converters_dict, skiprows=self.starting_row)
+                                   converters=self.converters_dict, skiprows=self.starting_row,
+                                   skipfooter=self.footer_rows)
             else:  # assume .xlsx file
                 # openpyxl supports .xlsx Excel file formats. According to documentation, engine=None should
                 # support xlsx and xls, but it doesn't seem to work for xls as of 11/10/2021
                 Data = pd.read_excel(filename, header=None, engine="openpyxl", usecols=self.needed_cols,
-                                     converters=self.converters_dict, skiprows=self.starting_row)
+                                     converters=self.converters_dict, skiprows=self.starting_row,
+                                     skipfooter=self.footer_rows)
             # https://stackoverflow.com/questions/6618515/sorting-list-based-on-values-from-another-list
             new_header = [x for _, x in sorted(zip(self.needed_cols, self.header))]
             Data.columns = new_header
-        except ValueError:
+        except (ValueError, IndexError):
+            # todo When there's a column name that references a column not in the data sheet, the following appears:
+            #         FutureWarning: Defining usecols with out of bounds indices is deprecated and will raise a ParserError in a future version.
+            #         return self._reader.parse(
+            #      Unfortunately, ParserError doesn't seem to be recognized as an exception right now (late April /
+            #      early May 2022), so this will need to be delt with later
+
+            # Next line fixes some IndexErrors that occur when loading XLSX files if you give an incorrect column name
+            # for the isolation valve or if you give a column name referencing a column outside the datasheet
+            self.converters_dict.clear()
+            new_pvars = False  # Whether new persistent variables (and self.converters_dict) have been obtained
+
             num_of_cols = self.n_of_cols(filename)
             while len(set(self.needed_cols)) < len(self.needed_cols) or \
                     not all(x < num_of_cols for x in self.needed_cols):
+
                 # check to make sure all values in the list are less than the length of the Excel sheet
                 # https://www.geeksforgeeks.org/python-check-if-all-the-values-in-a-list-are-less-than-a-given-value/
                 if not all(x < num_of_cols for x in self.needed_cols):
@@ -684,23 +786,28 @@ class PermeationPlots(tk.Frame):
                                               "Please ensure all instruments have column names that correspond to " +
                                               "columns in the Excel sheet.")
                     self.adjust_persistent_vars(retry=True)  # gives user a chance to fix the column names
+                    new_pvars = True
 
                 # check to make sure every column name is unique
                 if len(set(self.needed_cols)) < len(self.needed_cols):
                     tk.messagebox.showwarning("Data Reading Error",
                                               "Please ensure all instruments have unique column names")
                     self.adjust_persistent_vars(retry=True)  # gives user a chance to fix the column names
+                    new_pvars = True
+
+            # Make sure self.converters_dict is filled since it was cleared above
+            if not new_pvars:
+                self.get_persistent_vars()
 
             # Now that the errors are handled, extract the data from the Excel file and load it into a dataframe
             if self.file_type == ".xls":
-                # This is faster for large files, but isn't working .xlsx file formats
                 Data = pd.read_csv(filename, sep='\t', header=None, usecols=self.needed_cols,
-                                   converters=self.converters_dict, skiprows=self.starting_row)
+                                   converters=self.converters_dict, skiprows=self.starting_row,
+                                   skipfooter=self.footer_rows)
             else:  # assume .xlsx file
-                # openpyxl supports .xlsx Excel file formats. According to documentation, engine=None should
-                # support xlsx and xls, but it doesn't seem to work for xls as of 11/10/2021
                 Data = pd.read_excel(filename, header=None, engine="openpyxl", usecols=self.needed_cols,
-                                     converters=self.converters_dict, skiprows=self.starting_row)
+                                     converters=self.converters_dict, skiprows=self.starting_row,
+                                     skipfooter=self.footer_rows)
             # https://stackoverflow.com/questions/6618515/sorting-list-based-on-values-from-another-list
             new_header = [x for _, x in sorted(zip(self.needed_cols, self.header))]
             Data.columns = new_header
@@ -723,14 +830,24 @@ class PermeationPlots(tk.Frame):
     def adjust_persistent_vars(self, retry=False):
         """ Function for calling the window for adjusting persistent variables for loading permeation data,
             then update everything if something was changed """
+        loading_warn = True
+        if self.loading_data and not retry:
+            proceed = tk.messagebox.askyesno(title="Loading Data",
+                                             message="Warning: Data is currently loading. Proceeding may cause " +
+                                                     "unexpected or erroneous results. Do you wish to proceed?")
+            if not proceed:
+                return
+            else:
+                loading_warn = False
+
         self.update()
         # get location of gui
         x = self.winfo_rootx()
         y = self.winfo_rooty()
-        # Call the Adjust Persistent Variables window and, if something was changed, refresh graphs and variables
+        # Call the "Adjust Persistent Variables" window and, if something was changed, refresh graphs and variables
         d = AdjustPVars(storage=self.storage, pos=(x, y)).show_pv_window()
         if d and not retry:
-            self.refresh_graphs()
+            self.refresh_graphs(loading_warning=loading_warn)  # if a warning has already been given don't give it again
         # retry = True if adjust_persistent_vars is called but only the persistent variables need to be updated
         # (as opposed to updating the graphs as well)
         if d and retry:
@@ -841,7 +958,7 @@ class PermeationPlots(tk.Frame):
                                 " data points.\n\n"
 
         # determine the leak rate. self.leak_range points before opening, not including t0 (note that .loc is inclusive)
-        self.pleak[filename] = \
+        self.pleak_lf[filename] = \
             self.get_rates(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 't'],
                            data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 'SecP'])
 
@@ -862,11 +979,12 @@ class PermeationPlots(tk.Frame):
 
         # Convert the user's input time delay into a location in the array of data that doesn't depend on delta t
         # This line creates an array containing only the locations of times that are eligible to be a steady state
-        ss_del = np.where(data.loc[self.t0[filename]:, 't'] > self.ss_t_del.get() + data.loc[self.t0[filename], 't'])[0]
+        ss_del = np.where(data.loc[self.t0[filename]:, 't'] > self.ss_t_del.get() + data.loc[self.t0[filename], 't']
+                          + 0.000001)[0]  # Added .00001 to ensure precision errors don't lead to e_del being 0
         try:
             # Set the time delay to be the minimum number of data points away from t0 that still is further than
             # the user's input time delay
-            ss_del = ss_del[0]
+            ss_del = ss_del[0] - 1  # -1 to compensate for the > sign in e_del's def and in later checks
         except IndexError:  # This is expected if ss_del is empty
             # Set ss_del to the largest delay that still works
             ss_del = ss_time_max - (self.ss_range[filename] + self.t0[filename] + 2)
@@ -877,7 +995,7 @@ class PermeationPlots(tk.Frame):
                                 str(round(data.loc[ss_del + self.t0[filename], 't'] -
                                           data.loc[self.t0[filename], 't'], 3)) + " s.\n\n"
         if ss_del > ss_time_max - (self.ss_range[filename] + self.t0[filename] + 2):
-            # In case ss_del produces a useable data point but that data point is past an abrupt downturn in pressure
+            # In case ss_del produces a usable data point but that data point is past an abrupt downturn in pressure
             ss_del = ss_time_max - (self.ss_range[filename] + self.t0[filename] + 2)
             self.error_texts += "Steady State Warning with file " + filename + ". The user-input time delay" + \
                                 " exceeded the limit of " + \
@@ -886,36 +1004,41 @@ class PermeationPlots(tk.Frame):
                                 str(round(data.loc[ss_del + self.t0[filename], 't'] -
                                           data.loc[self.t0[filename], 't'], 3)) + " s.\n\n"
 
+        # Find the data point at which an equilibrium is reached
         ddSecP = pd.Series((dSecP.loc[2:].to_numpy() - dSecP.loc[:len(dSecP) - 3].to_numpy()) /
                            (data.loc[2:, 't'].to_numpy() - data.loc[:len(dSecP) - 3, 't'].to_numpy()))
         ddSecP = ddSecP.rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
         zeros = np.where(abs(ddSecP) < self.ss_tol.get())[0]
-        zeros = [z for z in zeros if self.t0[filename] + ss_del < z < ss_time_max - self.ss_range[filename]]
+        zeros = [z for z in zeros if self.t0[filename] + ss_del < z < ss_time_max - min_seq - 2]
         # If no steady state was found with the user-input tolerance, loop until find a steady state using new_ss_tol
         new_ss_tol = self.ss_tol.get()
         while not zeros and new_ss_tol < self.ss_tol.get() * 100000:
-            new_ss_tol *= 5
+            new_ss_tol = float("{:.2e}".format(new_ss_tol * 5))
             zeros = np.where(abs(ddSecP) < new_ss_tol)[0]
-            zeros = [z for z in zeros if self.t0[filename] + ss_del < z < ss_time_max - self.ss_range[filename]]
+            zeros = [z for z in zeros if self.t0[filename] + ss_del < z < ss_time_max - min_seq - 2]
         if new_ss_tol != self.ss_tol.get() and zeros:
             self.error_texts += "Steady State Warning with file " + filename + ". HyPAT was unable to find a steady" + \
                                 " state using the user-input tolerance " + str(self.ss_tol.get()) + \
-                                ". New tolerance was set to " + str(round(new_ss_tol, 14)) + \
-                                ", which successfully determined a time for beginning of the steady state.\n\n"
+                                ". New tolerance was set to {:.2e}".format(new_ss_tol) + \
+                                ", which successfully determined a time for the beginning of the steady state.\n\n"
         elif new_ss_tol != self.ss_tol.get():
-            zeros = [min(self.t0[filename] + ss_del, ss_time_max - self.ss_range[filename] - 1)]
+            zeros = [min(self.t0[filename] + ss_del + 1, ss_time_max - min_seq - 3)]
             self.error_texts += "Steady State Error with file " + filename + \
                                 ". HyPAT was unable to find steady state using the user-input tolerance " + \
                                 str(self.ss_tol.get()) + " or the computationally set tolerance " + \
-                                str(round(new_ss_tol, 14)) + ". Steady state time was set to " + \
+                                "{:.2e}".format(new_ss_tol) + ". Steady state time was set to " + \
                                 str(round(data.loc[zeros[0], 't'], 3)) + \
                                 " s, which is equal to either the starting time plus the user-input" + \
                                 " time delay until steady state or the maximum usable time, whichever is lower.\n\n"
-        self.tss[filename] = zeros[0]  # change ss_tol pe to address steady state issues
-        self.pss[filename] = self.get_rates(data.loc[self.tss[filename] + 1:self.tss[filename] + self.ss_range[filename], 't'],
-                                            data.loc[self.tss[filename] + 1:self.tss[filename] + self.ss_range[filename], 'SecP'])
+        # Set steady state time
+        self.tss[filename] = zeros[0]
+
         # determine steady state permeation rates
-        self.Prate[filename] = self.pss[filename]["slope"] - self.pleak[filename]["slope"]  # Pa/s
+        self.pss_lf[filename] = self.get_rates(data.loc[self.tss[filename] + 1:
+                                                        self.tss[filename] + self.ss_range[filename], 't'],
+                                               data.loc[self.tss[filename] + 1:
+                                                        self.tss[filename] + self.ss_range[filename], 'SecP'])
+        self.Prate[filename] = self.pss_lf[filename]["slope"] - self.pleak_lf[filename]["slope"]  # Pa/s
 
         # Get the temperature using an average of arbitrarily many TCs
         Tg_vals = pd.DataFrame()
@@ -930,8 +1053,8 @@ class PermeationPlots(tk.Frame):
             self.storage.standard_temp  # K
 
         # convert to molar flow rate mol/s using ideal gas law
-        Nrate = (self.pss[filename]["slope"] * self.volume.get()) / (R * self.Tgss[filename]) - \
-                (self.pleak[filename]["slope"] * self.volume.get()) / (R * self.Tg0[filename])
+        Nrate = (self.pss_lf[filename]["slope"] * self.volume.get()) / (R * self.Tgss[filename]) - \
+                (self.pleak_lf[filename]["slope"] * self.volume.get()) / (R * self.Tg0[filename])
         # convert to molar flux
         self.F[filename] = Nrate / self.A_perm.get()
 
@@ -947,7 +1070,7 @@ class PermeationPlots(tk.Frame):
                                                       np.sqrt(self.SecP_average[filename]))
 
         # Calculate the uncertainty in permeability
-        # We need uncertainty from the following: sl, SecP, PrimP, A_perm, pss[slope], pleak[slope], V, Tgss, Tg0
+        # We need uncertainty from the following: sl, SecP, PrimP, A_perm, pss_lf[slope], pleak_lf[slope], V, Tgss, Tg0
 
         # Find uncertainty of Tg0 when there are arbitrarily many TCs
         Tg0_errs = []
@@ -973,14 +1096,14 @@ class PermeationPlots(tk.Frame):
                         self.PrimP_cerr["PrimP"], self.PrimP_average[filename] * self.PrimP_perr["PrimP"] / 100)
 
         # Rate uncertainty
-        Prate_err = np.sqrt(self.pss[filename]['slope error'] ** 2 + self.pleak[filename]['slope error'] ** 2)
-        Nrate_err = 1 / R * np.sqrt((abs(self.pss[filename]['slope'] * self.volume.get() / self.Tgss[filename]) *
-                                     np.sqrt((self.pss[filename]['slope error'] / self.pss[filename]['slope']) ** 2 +
+        Prate_err = np.sqrt(self.pss_lf[filename]['slope error'] ** 2 + self.pleak_lf[filename]['slope error'] ** 2)
+        Nrate_err = 1 / R * np.sqrt((abs(self.pss_lf[filename]['slope'] * self.volume.get() / self.Tgss[filename]) *
+                                     np.sqrt((self.pss_lf[filename]['slope error'] / self.pss_lf[filename]['slope']) ** 2 +
                                              (Tgss_err / self.Tgss[filename]) ** 2 +
                                              (self.volume_err.get() / self.volume.get()) ** 2)
                                      ) ** 2 +
-                                    (abs(self.pleak[filename]['slope'] * self.volume.get() / self.Tg0[filename]) *
-                                     np.sqrt((self.pleak[filename]['slope error'] / self.pleak[filename]['slope']) ** 2 +
+                                    (abs(self.pleak_lf[filename]['slope'] * self.volume.get() / self.Tg0[filename]) *
+                                     np.sqrt((self.pleak_lf[filename]['slope error'] / self.pleak_lf[filename]['slope']) ** 2 +
                                              (Tg0_err / self.Tg0[filename]) ** 2 +
                                              (self.volume_err.get() / self.volume.get()) ** 2)
                                      ) ** 2
@@ -996,7 +1119,7 @@ class PermeationPlots(tk.Frame):
                                                         (np.sqrt(self.PrimP_average[filename]) - np.sqrt(
                                                             self.SecP_average[filename]))
                                                 ) ** 2
-        )
+                                               )
 
         # store uncertainties
         self.Prate_err[filename] = Prate_err
@@ -1007,16 +1130,17 @@ class PermeationPlots(tk.Frame):
         self.PrimP_err[filename] = PrimP_err
 
         # Data for permeability vs time graph
-        self.Perm_Plot[filename] = ((dSecP-self.pleak[filename]["slope"]) * self.volume.get() * sl) / \
+        self.Perm_Plot[filename] = ((dSecP - self.pleak_lf[filename]["slope"]) * self.volume.get() * sl) / \
                                    (((data['PrimP']) ** 0.5 - (
                                                         data['SecP']) ** 0.5) * R * (
-                                                        self.Tg_mean + 273.15) * self.A_perm.get())
+                                                        self.Tg_mean + self.storage.standard_temp) * self.A_perm.get())
 
-        # get temp from sample TC when we assess the leak
+        # get temp from sample TC
         self.Tsamp0[filename] = data.loc[self.t0[filename] - self.leak_range[filename]:
-                                         self.t0[filename] - 1, 'SampT'].mean() + 273.15
+                                         self.t0[filename] - 1, 'SampT'].mean() + self.storage.standard_temp
         self.Tsampss[filename] = data.loc[self.tss[filename] + 1:
-                                          self.tss[filename] + self.ss_range[filename], 'SampT'].mean() + 273.15
+                                          self.tss[filename] + self.ss_range[filename], 'SampT'].mean() + \
+            self.storage.standard_temp
         self.Tsampss_err[filename] = max(data.loc[self.tss[filename] + 1:
                                                   self.tss[filename] + self.ss_range[filename], 'SampT'].std(),
                                          self.SampT_cerr["SampT"],
@@ -1028,9 +1152,9 @@ class PermeationPlots(tk.Frame):
         R = self.storage.R * 1000  # J/mol K
 
         # Prep for the time-lag method
-        x_intercept = (self.pss[filename]["intercept"] - self.pleak[filename]["intercept"]) / \
-                      (self.pleak[filename]["slope"] - self.pss[filename]["slope"])
-        y_intercept = self.pleak[filename]["slope"] * x_intercept + self.pleak[filename]["intercept"]
+        x_intercept = (self.pss_lf[filename]["intercept"] - self.pleak_lf[filename]["intercept"]) / \
+                      (self.pleak_lf[filename]["slope"] - self.pss_lf[filename]["slope"])
+        y_intercept = self.pleak_lf[filename]["slope"] * x_intercept + self.pleak_lf[filename]["intercept"]
         self.intercept[filename] = (x_intercept, y_intercept)
         self.tlag[filename] = x_intercept - data.loc[self.t0[filename], 't']
         if self.tlag[filename] < 0:
@@ -1064,9 +1188,9 @@ class PermeationPlots(tk.Frame):
             print('\n', filename)
             print("mean:", np.mean(data.loc[self.t0[filename] - self.leak_range[filename]:
                                             self.t0[filename] - 1, 'dSecP']))
-            print("leak rate:", self.pleak[filename]["slope"])
+            print("leak rate:", self.pleak_lf[filename]["slope"])
             print("max:", np.max(Jt))  # large in 1505
-            print("Steady State Rate:", self.pss[filename]["slope"])
+            print("Steady State Rate:", self.pss_lf[filename]["slope"])
             print("Diffusivity guess:", D)
 
         # before optimizing
@@ -1083,16 +1207,17 @@ class PermeationPlots(tk.Frame):
             plt.figure(filename)
             plt.plot(self.rhs[filename][1:], label='no optimization')
             plt.plot(self.lhs[filename][1:], label='lhs')
+            plt.show()
 
         # optimizing using curve fit - should just be a wrapper around least squares
 
         h = data.loc[1, 't'] - data.loc[0, 't']
 
-        def f(xdata, D, dt, A):
+        def f(xdata, D_opt, dt_opt, A_opt):
             # Function for optimizing D using curve fit
             rhs = 1 + 2 * sum(
-                [(-1) ** n * np.exp(-D * n ** 2 * np.pi ** 2 * (xdata + dt) / sl ** 2) for n in range(1, 20)])
-            return rhs / A
+                [(-1) ** n * np.exp(-D_opt * n ** 2 * np.pi ** 2 * (xdata + dt_opt) / sl ** 2) for n in range(1, 20)])
+            return rhs / A_opt
 
         # Attempt to optimize D using curve fit and the above function. Show a warning if it fails due to RuntimeError
         try:
@@ -1106,14 +1231,16 @@ class PermeationPlots(tk.Frame):
         except RuntimeError:
             self.error_texts += "Curve Fit Error with file " + filename + \
                                 ". Curve fit unable to find optimal diffusivity parameters.\n\n"
-            popt = [D, 1, 1]
-            pcov = np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+            NaN = float("NaN")
+            popt = [D, 0, 1]
+            pcov = np.array([[NaN, NaN, NaN], [NaN, NaN, NaN], [NaN, NaN, NaN]])
         except OptimizeWarning:
             self.error_texts += "Curve Fit Warning with file " + filename + \
                                 ". Curve fit unable to find covariance of the diffusivity parameters. D has been" + \
                                 " set to the diffusivity calculated by the time-lag method.\n\n"
-            popt = [D, 1, 1]
-            pcov = np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+            NaN = float("NaN")
+            popt = [D, 0, 1]
+            pcov = np.array([[NaN, NaN, NaN], [NaN, NaN, NaN], [NaN, NaN, NaN]])
         perr = np.sqrt(np.diag(pcov))
         self.D_err[filename] = perr[0]
 
@@ -1170,7 +1297,7 @@ class PermeationPlots(tk.Frame):
 
         # Diffusivity comparison plots for optimization (bottom right graph)
         self.comparison_plot(filename, self.ax3)
-        # time may be one second off, but the index is about the same as the time array used earlier.
+
         self.canvas.draw()
         self.toolbar.update()
         self.canvas1.draw()
@@ -1203,6 +1330,13 @@ class PermeationPlots(tk.Frame):
 
     def popout_plot(self, ax):
         """ creates the selected plot using the regular popout from matplotlib """
+        if self.loading_data:
+            proceed = tk.messagebox.askyesno(title="Loading Data",
+                                             message="Warning: Data is currently loading. Proceeding may cause " +
+                                                     "unexpected or erroneous results. Do you wish to proceed?")
+            if not proceed:
+                return
+
         filename = self.current_file.get()
         if filename != "No files yet":
             data = self.datafiles[filename]
@@ -1238,8 +1372,12 @@ class PermeationPlots(tk.Frame):
 
     def pressure_time_plot(self, data, filename, fig1, ax1, ax12):
         """ Creates the pressure vs time (top right) plot """
+        # Plot the point where the isolation valve opens and where steady state is determined
+        ax1.plot(data.loc[self.t0[filename], 't'], data.loc[self.t0[filename], 'SecP'], 'yo', label="t$_0$")
+        ax1.plot(data.loc[self.tss[filename], 't'], data.loc[self.tss[filename], 'SecP'], 'mo', label="t$_{ss}$")
+
         # Plot secondary pressure and set up axes for it
-        ax1.plot(data['t'], data['SecP'], label='Secondary Pressure')
+        ax1.plot(data['t'], data['SecP'], '.', label='Secondary Pressure')
         ax1.set_title(self.ax1_title)
         ax1.set_xlabel(self.ax1_xlabel)
         ax1.set_ylabel(self.ax1_ylabel)
@@ -1248,14 +1386,24 @@ class PermeationPlots(tk.Frame):
         ax12.plot(data['t'], data['PrimP'], color='orange', label='Primary Pressure')
         ax12.set_ylabel(self.ax12_ylabel)
 
-        # Generate and plot the red leak line and green steady state line
-        xleak = data.loc[self.t0[filename] + 1:self.t0[filename] + self.leak_range[filename], 't']
-        yleak = self.pleak[filename]["slope"] * xleak + self.pleak[filename]["intercept"]
+        # Generate and plot the red leak line (showing which values are used in initial calculations)
+        # and green steady state line (showing which values are used in final calculations)
+        xleak = data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 't']
+        yleak = self.pleak_lf[filename]["slope"] * xleak + self.pleak_lf[filename]["intercept"]
         xss = data.loc[self.tss[filename] + 1:self.tss[filename] + self.ss_range[filename], 't']
-        yss = self.pss[filename]["slope"] * xss + self.pss[filename]["intercept"]
+        yss = self.pss_lf[filename]["slope"] * xss + self.pss_lf[filename]["intercept"]
         ax1.plot(xleak, yleak, color='red', label='Leak')
         ax1.plot(xss, yss, color='lime', label='Steady State')
-        # Plot the point that would be the intersection of the leak line and steady state line if they were extended
+        # Extrapolate the lines further
+        xleak_ex = np.array([data.loc[self.t0[filename] - self.leak_range[filename], 't'],
+                             (self.intercept[filename])[0]])
+        yleak_ex = self.pleak_lf[filename]["slope"] * xleak_ex + self.pleak_lf[filename]["intercept"]
+        xss_ex = np.array([(self.intercept[filename])[0],
+                           data.loc[self.tss[filename] + self.ss_range[filename], 't']])
+        yss_ex = self.pss_lf[filename]["slope"] * xss_ex + self.pss_lf[filename]["intercept"]
+        ax1.plot(xleak_ex, yleak_ex, ":", color='red')
+        ax1.plot(xss_ex, yss_ex, ":", color='lime')
+        # Plot a point at the intersection of the leak line and steady state line
         ax1.plot(*self.intercept[filename], 'o')
 
         # Make sure ticks are in the right spot
@@ -1263,7 +1411,13 @@ class PermeationPlots(tk.Frame):
         ax12.yaxis.set_ticks_position('right')
         ax1.xaxis.set_ticks_position('bottom')
 
-        fig1.legend(loc="lower right", bbox_to_anchor=(1, 0), bbox_transform=ax1.transAxes)
+        # Ensure all plots are on the legend. Simply using fig1.legend(...) doesn't get rid of old legends,
+        # causing them to stack up in a way I can't figure out how to remove.
+        # https://stackoverflow.com/questions/5484922/secondary-axis-with-twinx-how-to-add-to-legend/47370214#47370214
+        pt_lines, pt_labels = ax1.get_legend_handles_labels()
+        pt_lines2, pt_labels2 = ax12.get_legend_handles_labels()
+        ax12.legend(pt_lines + pt_lines2, pt_labels + pt_labels2, loc="lower right", bbox_to_anchor=(1, 0),
+                    bbox_transform=ax1.transAxes, framealpha=0.5)
 
     def perm_time_plot(self, data, filename, fig2, ax2, ax22):
         """ Creates the permeability vs time (bottom middle) plot """
@@ -1292,7 +1446,13 @@ class PermeationPlots(tk.Frame):
         # dipping way below 0. Added the top limit was because autoscaling was failing once the bottom limit was added.
         ax2.set_ylim(bottom=0, top=1.25*self.Phi[filename])
 
-        fig2.legend(loc="lower right", bbox_to_anchor=(1, 0), bbox_transform=ax2.transAxes)
+        # Ensure all plots are on the legend. Simply using fig2.legend(...) doesn't get rid of old legends,
+        # causing them to stack up in a way I can't figure out how to remove.
+        # https://stackoverflow.com/questions/5484922/secondary-axis-with-twinx-how-to-add-to-legend/47370214#47370214
+        pt_lines, pt_labels = ax2.get_legend_handles_labels()
+        pt_lines2, pt_labels2 = ax22.get_legend_handles_labels()
+        ax22.legend(pt_lines + pt_lines2, pt_labels + pt_labels2, loc="lower right", bbox_to_anchor=(1, 0),
+                    bbox_transform=ax2.transAxes, framealpha=0.5)
 
     def comparison_plot(self, filename, ax3):
         """ Creates the diffusivity optimization comparison (bottom right) plot """
@@ -1305,7 +1465,7 @@ class PermeationPlots(tk.Frame):
         ax3.set_ylabel(self.ax3_ylabel)
         ax3.yaxis.set_ticks_position('left')
         ax3.xaxis.set_ticks_position('bottom')
-        ax3.legend()
+        ax3.legend(framealpha=0.5)
 
     def PDK_plot(self, ax):
         """ Creates the PDK (bottom left) plot for calculated properties of different files """
@@ -1360,7 +1520,7 @@ class PermeationPlots(tk.Frame):
                         f'\nPressure={p:.3e} Pa'
             else:
                 # This shouldn't be possible
-                print("Error, you should have selected Permeability, Diffusivity, Solubility, or Flux.")
+                showerror("Selection Error", "Error, you should have selected Permeability, Diffusivity, Solubility.")
                 y = self.Phi[filename]
                 yerr = self.Phi_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' mol m$^{-1}\,$s$^{-1}\,$Pa$^{-0.5}$' + \
@@ -1384,6 +1544,13 @@ class PermeationPlots(tk.Frame):
 
     def save_figures(self):
         """ Saves figures into a folder """
+        if self.loading_data:
+            proceed = tk.messagebox.askyesno(title="Loading Data",
+                                             message="Warning: Data is currently loading. Proceeding may cause " +
+                                                     "unexpected or erroneous results. Do you wish to proceed?")
+            if not proceed:
+                return
+
         filename = asksaveasfilename(initialdir=os.path.dirname(__file__), initialfile="figures")
         if filename != '':
             # check for extension and remove it
@@ -1459,7 +1626,7 @@ class AdjustPVars(tk.Toplevel):
         # Method of scaling the window width according to number of TCs measuring GasT. At num_GasT = 10,
         # things are still fine. Potentially add a scrollbar instead.
         if self.num_GasT.get() > 2:
-            width += 80 + int(extra_width * (self.num_GasT.get() - 3))
+            width += int(extra_width * (self.num_GasT.get() - 2))
             self.geometry("{}x{}+{}+{}".format(width, height, pos_right, pos_down))
 
         # time
@@ -1510,7 +1677,9 @@ class AdjustPVars(tk.Toplevel):
         self.b_IV = tk.DoubleVar(value=self.misc_info['Isolation Valve'][2])
 
         # Row at which the program starts reading data
-        self.starting_row = tk.DoubleVar(value=self.misc_info['Starting Row'][0])
+        self.starting_row = tk.IntVar(value=self.misc_info['Starting Row'][0])
+        # Rows at the end of the file which the program doesn't read
+        self.footer_rows = tk.IntVar(value=self.misc_info['Rows in Footer'][0])
 
         # store entries
         self.inputs = {}
@@ -1535,16 +1704,26 @@ class AdjustPVars(tk.Toplevel):
     def one_or_more(self, tvar, variable, key, pf=None):
         """ Ensure the user entry is greater than 1. If not, set it equal to 1. """
         self.storage.check_for_number(tvar, variable, key, parent_frame=pf)
-        # Either set the entry to 1 if less than 1 or to the user's entry
+        maxTCnum = 8  # Max number of TCs to allow
+        # Either set the entry to 1 if less than 1, to int(maxTCnum) if more than int(maxTCnum), or to the user's entry
         if key in variable.keys() and tvar.get() < 1:
             tk.messagebox.showwarning("Invalid Entry", "Please enter a number greater than or equal to 1.")
             self.deiconify()
             variable[key].delete(0, "end")
             variable[key].insert(0, "1")
             tvar.set(1)
-        # elif tvar.get() != int(tvar.get()):
-            # tk.messagebox.showwarning("Invalid Entry", "Please enter an integer.")
-            # self.deiconify()
+        elif key in variable.keys() and tvar.get() > int(maxTCnum):
+            # Keeps the user from having to type out too many unique column names if something like "100" gets submitted
+            tk.messagebox.showwarning("Invalid Entry", 'Please enter a number less than or equal to ' +
+                                                       '{}.\n\n'.format(int(maxTCnum)) + 'If more than ' +
+                                                       '{} TCs are needed,'.format(int(maxTCnum)) + ' simply search ' +
+                                                       'for "maxTCnum" in the source code and change the ' +
+                                                       '{} in its definition '.format(int(maxTCnum)) +
+                                                       'to your desired number.')
+            self.deiconify()
+            variable[key].delete(0, "end")
+            variable[key].insert(0, "{}".format(int(maxTCnum)))
+            tvar.set(int(maxTCnum))
         else:
             variable[key].delete(0, "end")
             variable[key].insert(0, "{}".format(int(tvar.get())))
@@ -1692,13 +1871,6 @@ class AdjustPVars(tk.Toplevel):
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
 
-        tk.Label(parent, text="Starting Row").grid(row=entry_row + 4, column=entry_col + 1)
-        self.add_entry(self, parent, variable=self.inputs, key="Starting Row", text="", innersubscript="",
-                       innertext="", subscript="", tvar=self.starting_row, units="", ent_w=entry_w,
-                       row=entry_row + 5, column=entry_col, in_window=True,
-                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
-                                                                                             parent_frame=pf))
-
         # Second row of instruments
 
         row2entries = entry_row + 7
@@ -1767,6 +1939,21 @@ class AdjustPVars(tk.Toplevel):
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
 
+        entry_col += 3
+        tk.Label(parent, text="Starting Row").grid(row=row2entries + 0, column=entry_col + 1)
+        self.add_entry(self, parent, variable=self.inputs, key="Starting Row", text="", innersubscript="",
+                       innertext="", subscript="", tvar=self.starting_row, units="", ent_w=entry_w,
+                       row=row2entries + 1, column=entry_col, in_window=True,
+                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
+                                                                                             parent_frame=pf))
+
+        tk.Label(parent, text="Rows in Footer").grid(row=row2entries + 2, column=entry_col + 1)
+        self.add_entry(self, parent, variable=self.inputs, key="Footer Rows", text="", innersubscript="",
+                       innertext="", subscript="", tvar=self.footer_rows, units="", ent_w=entry_w,
+                       row=row2entries + 3, column=entry_col, in_window=True,
+                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
+                                                                                             parent_frame=pf))
+
     def submit(self):
         """Updates the persistent variables with user input"""
 
@@ -1785,8 +1972,8 @@ class AdjustPVars(tk.Toplevel):
                               self.m_SampT.get(), self.b_SampT.get(), self.cerr_SampT.get(), self.perr_SampT.get(),
                               self.m_PrimP.get(), self.b_PrimP.get(), self.cerr_PrimP.get(), self.perr_PrimP.get(),
                               self.m_SecP.get(), self.b_SecP.get(), self.cerr_SecP.get(), self.perr_SecP.get(),
-                              self.m_IV.get(), self.b_IV.get(), self.starting_row.get(), self.num_GasT.get()])) + \
-                any(np.isnan(val.get()) for val in GasT_vals) > 0:
+                              self.m_IV.get(), self.b_IV.get(), self.starting_row.get(), self.footer_rows.get(),
+                              self.num_GasT.get()])) + any(np.isnan(val.get()) for val in GasT_vals) > 0:
             tk.messagebox.showwarning(title="Missing Entry",
                                       message="Please fill in remaining boxes before continuing.")
             self.deiconify()
@@ -1817,6 +2004,7 @@ class AdjustPVars(tk.Toplevel):
                 self.misc_info['Isolation Valve'] = [self.col_IV.get(), self.m_IV.get(),
                                                      self.b_IV.get(), np.nan, np.nan]
                 self.misc_info['Starting Row'] = [self.starting_row.get(), np.nan, np.nan, np.nan, np.nan]
+                self.misc_info['Rows in Footer'] = [self.footer_rows.get(), np.nan, np.nan, np.nan, np.nan]
 
                 # Create or remove data from dataframe so that it has the same number of instruments measuring GasT
                 # as self.num_GasT. Note that this can handle non-integer values of self.numGasT
@@ -1880,6 +2068,7 @@ class AdjustPVars(tk.Toplevel):
                                   self.cerr_SecP.get(), self.perr_SecP.get()]
         temp_misc_info['Isolation Valve'] = [self.col_IV.get(), self.m_IV.get(), self.b_IV.get(), np.nan, np.nan]
         temp_misc_info['Starting Row'] = [self.starting_row.get(), np.nan, np.nan, np.nan, np.nan]
+        temp_misc_info['Rows in Footer'] = [self.footer_rows.get(), np.nan, np.nan, np.nan, np.nan]
         temp_numbers_info['GasT'] = [int(self.num_GasT.get())]  # "int" is so HyPAT recognizes when there was no change
 
         # List of all column names for checking for uniqueness
@@ -1951,7 +2140,8 @@ class PPSettingsHelp(tk.Toplevel):
         td = {}
         tdt = {}
         for item in (" ", "t [s]: ", "PrimP [Pa]: ", "SecP [Pa]: ", "Isolation Valve [1/0]: ", "Starting Row: ",
-                     "GasT [\u2103]: ", "SampT [\u2103]: ", "col: ", "m: ", "b: ", "cerr: ", "perr: "):
+                     "Rows in Footer: ", "GasT [\u2103]: ", "SampT [\u2103]: ", "col: ", "m: ", "b: ", "cerr: ",
+                     "perr: "):
             td[item] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
             tdt[item + "text"] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
 
@@ -1970,20 +2160,21 @@ class PPSettingsHelp(tk.Toplevel):
         tdt["PrimP [Pa]: text"].insert("insert", "Primary side pressure.")
         tdt["SecP [Pa]: text"].insert("insert", "Secondary side pressure.")
         tdt["Isolation Valve [1/0]: text"].insert("insert", "The data describing whether the isolation valve is " +
-                                                            "closed (~0) or open (not ~0). Start of permeation is " +
-                                                            "measured from when the valve first goes from closed to " +
-                                                            "open.")
+                                                  "closed (~0) or open (not ~0). Start of permeation is " +
+                                                  "measured from when the valve first goes from closed to " +
+                                                  "open.")
         tdt["Starting Row: text"].insert("insert", "The row at which the program starts reading data from the Excel " +
-                                                   "sheet (0-indexed).")
-        tdt["GasT [\u2103]: text"].insert("insert", "The thermocouples that measure the temperature of the gas. " +
-                                                    "There can be arbitrarily number of thermocouples selected in " +
-                                                    'Number of TCs measuring GasT.')
+                                                   "sheet (0-indexed). HyPAT assumes the data file has no header, so " +
+                                                   "use this to start analysis after the header.")
+        tdt["Rows in Footer: text"].insert("insert", "How many rows at the bottom of the file to ignore.")
+        tdt["GasT [\u2103]: text"].insert("insert", "The thermocouples (TCs) that measure the gas's temperature. " +
+                                                    "The number of TCs can be set arbitrarily via " +
+                                                    "'Number of TCs measuring GasT.'")
         tdt["SampT [\u2103]: text"].insert("insert", "The thermocouple that measures the sample temperature.")
-        tdt["col: text"].insert("insert", "Reference column for variable in raw data file. " +
-                                          "The application is programmed for Excel files with no header.")
+        tdt["col: text"].insert("insert", "Reference column for corresponding variable in raw data file.")
         tdt["m: text"].insert("insert", "Every entry in the column of data is converted according to m*x + b, " +
-                                        "where x is the entry in the column. Use this to convert the column's data to " +
-                                        "SI units.")
+                                        "where x is the entry in the column. Use this to convert the column's data " +
+                                        "to SI units.")
         tdt["b: text"].insert("insert", "See entry for 'm' above.")
         tdt["cerr: text"].insert("insert", "Constant uncertainty of the instrument, e.g., +/- 2\u2103. " +
                                            "When calculating the uncertainty caused by each instrument, the " +
@@ -2018,7 +2209,6 @@ class PPSettingsHelp(tk.Toplevel):
                                  wrap=tk.WORD, height=1)
 
             # Set height of each right-side widget according to how many lines it will take to display
-
             text_width = btfont.measure(tdt[symbol + "text"].get("1.0", 'end-1c')) // divisor2 + addend2
             text_height = 1
             while text_width >= tdt[symbol + "text"].cget("width"):  # Check if the text width > widget's width.

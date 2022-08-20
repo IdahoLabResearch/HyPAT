@@ -1,4 +1,4 @@
-""" Keep track of important variables and calculations for HyPAT, especially the permeation estimates tab """
+""" Keep track of important variables and calculations for HyPAT, especially the Permeation Estimates tab """
 import tkinter as tk
 from tkinter import ttk
 import numpy as np
@@ -106,12 +106,12 @@ class Storage:
         # tolerance used for finding steady state during permeation data analysis and equilibrium during absorption d.a.
         self.tol = tk.DoubleVar(value=1e-6)
         # minimum number of seconds following t0 before finding a steady state or equilibrium
-        self.t_del = tk.DoubleVar(value=100)
+        self.t_del = tk.DoubleVar(value=100)  # Note, as of 5/28/22, this isn't used in absorption_plots.py
         # default number of data points used in determining leak, steady state, and/or equilibrium
         self.gen_dp_range = tk.IntVar(value=30)
 
-        # store the permeation calculations
-        self.PermeationParameters = pd.DataFrame()
+        # store the transport properties calculations
+        self.TransportParameters = pd.DataFrame()
 
     def connect_variables(self):
         """ Set up variables so that functions are triggered if they are changed"""
@@ -148,8 +148,8 @@ class Storage:
             Read in the melting temp if available. Combine this all into a dataframe and return that dataframe """
         # read in diffusivity and solubility data
         # todo It'd be nice to have the user select a file similar to "SaveFileExample.xlsx" in the datafiles folder
-        # todo then if two of the three quantities (diffusivity, solubility, permeability) are present, the third
-        # todo will be calculated. This can be similar to how it is done in overview_plots.py - EditMaterials class.
+        #      then if two of the three quantities (diffusivity, solubility, permeability) are present, the third
+        #      will be calculated. This can be similar to how it is done in overview_plots.py - EditMaterials class.
         filename = os.path.join('datafiles', 'material_data.xlsx')
         df = pd.read_excel(filename, header=[0, 1], engine="openpyxl")  # openpyxl supports .xlsx file format, not .xls
         # set up the index using material names

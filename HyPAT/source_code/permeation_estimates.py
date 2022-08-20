@@ -1,5 +1,4 @@
-""" Main page to accept input from the user. This is the Permeation Estimates tab in the
-    Hydrogen Permeation Analysis Tool """
+""" Main page to accept input from the user. This is the Permeation Estimates tab in HyPAT """
 import tkinter as tk
 from tkinter import ttk, font
 from .data_storage import Widgets
@@ -115,27 +114,27 @@ class InputForm(tk.Frame):
                       tvar=self.storage.oring_thickness, units="[mm]", row=3)
         self.add_text2(box3, text="Permeation surface area: A", subscript="perm",
                        tvar1=self.storage.A_perm, tvar2=self.storage.A_perm2,
-                       units=(u"[m\u00b2]", u"[cm\u00b2]"), row=4)  # "[m^2]", "[cm^2]"
+                       units=("[m\u00b2]", "[cm\u00b2]"), row=4)  # "[m^2]", "[cm^2]"
         box3.grid(row=row, column=column, rowspan=1, sticky="nsew")
 
     def create_properties_frame(self, parent, row, column):
         """ Sets up H mass transport properties frame """
         box2 = tk.LabelFrame(parent, text="H MASS TRANSPORT PROPERTIES", fg="blue")
         self.add_text(box2, text="Pre-exponential factor for diffusivity: D", subscript="0",
-                      units=u"[m\u00b2 s\u207b\u00b9]", tvar=self.storage.D0, row=0)  # "[m^2 s^-1]"
+                      units="[m\u00b2 s\u207b\u00b9]", tvar=self.storage.D0, row=0)  # "[m^2 s^-1]"
         self.add_text(box2, text="Activation energy for diffusivity: E", subscript="D",
-                      units=u"[kJ mol\u207b\u00b9]", tvar=self.storage.E_D, row=1)  # "[kJ mol^-1]",
+                      units="[kJ mol\u207b\u00b9]", tvar=self.storage.E_D, row=1)  # "[kJ mol^-1]",
         self.add_text(box2, text="Pre-exponential factor for solubility: K", subscript="0",
-                      units=u"[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]",  # "[mol m^-3 Pa^-0.5]"
+                      units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]",  # "[mol m^-3 Pa^-0.5]"
                       tvar=self.storage.K0, row=2)
         self.add_text(box2, text="Activation energy for solubility: E", subscript="K",
-                      units=u"[kJ mol\u207b\u00b9]", tvar=self.storage.E_K, row=3)  # "[kJ mol^-1]"
-        self.add_text(box2, text="Pre-exponential factor for permeability: P", subscript="0",
+                      units="[kJ mol\u207b\u00b9]", tvar=self.storage.E_K, row=3)  # "[kJ mol^-1]"
+        self.add_text(box2, text="Pre-exponential factor for permeability: \u03A6", subscript="0",
                       # units="[mol m^-1 s^-1 Pa^-0.5]"
-                      units=u"[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
+                      units="[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
                       tvar=self.storage.P0, row=4)
-        self.add_text(box2, text="Activation energy for permeability: E", subscript="P",
-                      units=u"[kJ mol\u207b\u00b9]", tvar=self.storage.E_P, row=5)  # "[kJ mol^-1]",
+        self.add_text(box2, text="Activation energy for permeability: E", subscript="\u03A6",
+                      units="[kJ mol\u207b\u00b9]", tvar=self.storage.E_P, row=5)  # "[kJ mol^-1]",
 
         box2.grid(row=row, column=column, rowspan=1, sticky="nsew")
 
@@ -206,7 +205,7 @@ class InputForm(tk.Frame):
         box1 = tk.LabelFrame(parent, text="TEMPERATURE INPUT", fg="blue")
         self.add_entry2(self, box1, self.input, key="temp", text="Temperature: T", innersubscript="C",
                         innertext=", T", subscript="K",
-                        units=(u"[\u2103]", "[K]"), tvar1=self.storage.Tc, tvar2=self.storage.Tk, row=0,
+                        units=("[\u2103]", "[K]"), tvar1=self.storage.Tc, tvar2=self.storage.Tk, row=0,
                         conversion=lambda tvar1, variable, key: self.storage.update_temperature(tvar1, variable, key))
         self.add_text(box1, text="Reciprocal temperature: 1/T", subscript="K",
                       units="[1/K]", tvar=self.storage.invTk, row=1)
@@ -225,7 +224,7 @@ class InputForm(tk.Frame):
     def create_secondary_input_frame(self, parent, row, column):
         """ Sets up frame for secondary input """
         box3 = tk.LabelFrame(parent, text="SECONDARY INPUT", fg="blue")
-        self.add_entry(self, box3, self.input, key="sV", text="Secondary side volume: sV", subscript="",
+        self.add_entry(self, box3, self.input, key="sV", text="Secondary side volume: V", subscript="sec",
                        units="[cc]", tvar=self.storage.sV, row=0,
                        command=lambda tvar, variable, key: self.storage.check_for_number(tvar, variable, key))
         self.add_entry2(self, box3, self.input, key="t_accum", text="Accumulation time: t", subscript="accum",
@@ -240,22 +239,22 @@ class InputForm(tk.Frame):
         box4 = tk.LabelFrame(parent, text="ESTIMATED SECONDARY PRESSURE BY REFERENCE PERMEABILITY DATA", fg="blue")
         self.add_text(box4, text="Estimated time-lag: t", subscript="L",
                       units="[sec]", tvar=self.storage.t_L, row=0)
-        self.add_text(box4, text="Estimated molecular permeability: Pr", subscript=" ",
+        self.add_text(box4, text="Estimated molecular permeability: \u03A6", subscript="",
                       # units="[mol m^-1 s^-1 Pa^-0.5]"
-                      units=u"[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
+                      units="[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
                       tvar=self.storage.Pr_D, row=1)
-        self.add_text2(box4, text="Estimated molecular permeation flux: F", subscript="", subsubscript="",
+        self.add_text2(box4, text="Estimated molecular permeation flux: J", subscript="inf", subsubscript="",
                        # units=("[mol m^-2 s^-1]", "[atoms m^-2 s^-1]")
-                       units=(u"[mol m\u207b\u00b2 s\u207b\u00b9]", u"[atoms m\u207b\u00b2 s\u207b\u00b9]"),
+                       units=("[mol m\u207b\u00b2 s\u207b\u00b9]", "[atoms m\u207b\u00b2 s\u207b\u00b9]"),
                        tvar1=self.storage.flux, tvar2=self.storage.flux_atoms, row=2)
         self.add_text(box4, text="Estimated molecular permeation flux \u00d7 thickness: x",  # times
-                      innersubscript="samp", innertext="F", subscript="", subsubscript="",
-                      units=u"[mol m\u207b\u00b9 s\u207b\u00b9]",  # "[mol m^-1 s^-1]",
+                      innersubscript="samp", innertext="J", subscript="inf", subsubscript="",
+                      units="[mol m\u207b\u00b9 s\u207b\u00b9]",  # "[mol m^-1 s^-1]",
                       tvar=self.storage.x_sampx_flux, row=3)
         self.add_text(box4, text="Estimated molecular permeation rate: Q", subscript="", subsubscript="",
-                      units=u"[mol s\u207b\u00b9]",  # "[mol s^-1]",
+                      units="[mol s\u207b\u00b9]",  # "[mol s^-1]",
                       tvar=self.storage.Q, row=4)
-        self.add_text2(box4, text="Estimated rate of pressure increase: \u0394sP", subscript="",  # delta sP
+        self.add_text2(box4, text="Estimated rate of pressure increase: dP/dt", subscript="",
                        units=("[Torr s\u207b\u00b9]", "[Pa s\u207b\u00b9]"),  # ("[Torr s^-1]", "[Pa s^-1]")
                        tvar1=self.storage.del_sP, tvar2=self.storage.del_sP_Pa, row=5)
         self.add_text2(box4, text="Estimated final secondary pressure: sP", subscript="final",
@@ -263,7 +262,7 @@ class InputForm(tk.Frame):
                        tvar2=self.storage.sP_final2, row=6)
         self.add_text(box4, text="Detectable with capacitance manometer (>1E-4 Torr):", subscript="",
                       units="YES=detectable, NO=undetectable", tvar=self.storage.Det_CM, row=7)
-        self.add_text(box4, text="Estimated pressure in QMS: p", subscript="", subsubscript="QMS",
+        self.add_text(box4, text="Estimated pressure in QMS: P", subscript="", subsubscript="QMS",
                       units="[Torr]", tvar=self.storage.p_QMS, row=8)
         self.add_text(box4, text="Detectable with QMS (>1E-10 Torr):", subscript="",
                       units="YES=detectable, NO=undetectable", tvar=self.storage.Det_QMS, row=9)
@@ -294,9 +293,9 @@ class InputForm(tk.Frame):
         self.add_text(parent, text="Estimated time-lag: t", subscript="L",
                       units="[sec]", tvar=self.storage.t_L, row=0)
         self.add_text(parent, text="Estimated molecular permeation rate: Q", subscript="", subsubscript="",
-                      units=u"[mol s\u207b\u00b9]",  # "[mol s^-1]",
+                      units="[mol s\u207b\u00b9]",  # "[mol s^-1]",
                       tvar=self.storage.Q, row=1)
-        self.add_text(parent, text="Estimated pressure in QMS: p", subscript="", subsubscript="QMS",
+        self.add_text(parent, text="Estimated pressure in QMS: P", subscript="", subsubscript="QMS",
                       units="[Torr]", tvar=self.storage.p_QMS, row=2)
         self.add_text(parent, text="Estimated final secondary pressure: sP", subscript="final",
                       units="[Torr]", tvar=self.storage.sP_final, row=3)

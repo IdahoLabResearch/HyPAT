@@ -32,7 +32,7 @@ class Plots(tk.Frame):
         self.index = list(self.storage.data.index)
         self.columns = list(self.storage.data.columns)
         self.item = {}  # Container for storing whether a material is selected for plotting
-        self.exp_data = DataFrame()  # Container for data received from permeation_plots
+        self.exp_data = DataFrame()  # Container for data received from permeation_plots or absorption_plots
         self.start = -1
 
         self.plotted_once = False
@@ -49,9 +49,9 @@ class Plots(tk.Frame):
                             '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
         self.current_base_color_idx = 0  # for default plotting
         self.artists1, self.artists2 = [], []
-        self.experimental_data0 = {}  # Container for the diffusivity from each file loaded into permeation_plots
-        self.experimental_data1 = {}  # Container for the solubility from each file loaded into permeation_plots
-        self.experimental_data2 = {}  # Container for the permeability from each file loaded into permeation_plots
+        self.experimental_data0 = {}  # Container for diffusivity from each file loaded into permeation/absorption_plots
+        self.experimental_data1 = {}  # Container for solubility from each file loaded into permeation/absorption_plots
+        self.experimental_data2 = {}  # Container for permeability from each file loaded into permeation/absorption_plots
 
         # make the frames
         self.create_materials_frame()
@@ -114,13 +114,14 @@ class Plots(tk.Frame):
         self.rowconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
 
-    def plot_permeation(self):
-        """ plot/remove the experimental permeation data in the overview plots """
+    def plot_trans_props(self):
+        """ plot/remove the experimental permeation/absorption data in the overview plots """
 
-        # Store the old dataframe for when we need to remove old data after new data is selected in permeation_plots
+        # Store the old dataframe for when we need to remove old data after new data is selected in
+        # permeation/absorption_plots
         old_data = self.exp_data
         # Get the new dataframe from the latest selected folder
-        self.exp_data = self.storage.PermeationParameters
+        self.exp_data = self.storage.TransportParameters
         if self.exp_data.empty and old_data.empty:
             # If no data has been loaded into HyPAT
             return
@@ -129,7 +130,7 @@ class Plots(tk.Frame):
             if self.exp_data.empty:
                 return
 
-            # Plot data from permeation_plots tab
+            # Plot data from permeation/absorption_plots tab
             for file in self.exp_data.index:
                 self.experimental_data2[file] = self.ax[2].plot(
                     1000/self.exp_data.loc[file, "Sample Temperature [K]"],
@@ -177,7 +178,8 @@ class Plots(tk.Frame):
             Arrhenius fit to determine the pre-exponential factors and activation energies """
         from scipy.optimize import curve_fit
 
-        # define data for analysis according to whether it comes from the permeation plots tab or a user-selected file
+        # define data for analysis according to whether it comes from the permeation/absorption plots tab or
+        # a user-selected file
         if self.exp_data.empty or self.b.config('text')[-1] == 'Add Experimental Data' or new_data:
             # If there is nothing in the dataframe that holds data or if the button for displaying experimental data is
             # toggled so that no data is currently displayed or if the button was clicked to select a new file...
@@ -201,7 +203,8 @@ class Plots(tk.Frame):
         except KeyError:  # This is expected if the file doesn't have the correct headers
             tk.messagebox.showerror(title="Arrhenius Fit Error",
                                     message='File must be formatted like the files generated'
-                                            ' by the "Export to Excel" button in the "Permeation Plots" tab."')
+                                            ' by the "Export to Excel" button in the "Permeation Plots" tab or'
+                                            ' in the "Absorption Plots" tab.')
             return
 
         # The Arrhenius function
@@ -412,6 +415,8 @@ class Plots(tk.Frame):
         self.ax = [self.fig.add_subplot(1, 3, i) for i in range(1, 4)]
         # The below line helps keep the graphs looking nice when the window gets made small. Note that tight_layout is
         # an experimental feature as of 10/16/2021 and may be changed unpredictably.
+        # todo Update this to the official layout feature. See:
+        #      https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html
         self.fig.set_tight_layout("True")
 
         # Format axes
@@ -434,7 +439,7 @@ class Plots(tk.Frame):
 
         self.toolbar = NavigationToolbar2Tk(self.canvas, plot_frame)
         # add the buttons to the toolbar
-        self.b = tk.Button(master=self.toolbar, text="Add Experimental Data", command=self.plot_permeation)
+        self.b = tk.Button(master=self.toolbar, text="Add Experimental Data", command=self.plot_trans_props)
         self.b.pack(side="left", padx=1)
         self.b2 = tk.Button(master=self.toolbar, text="Enable Multiple Labels", command=self.toggle_multiple_labels)
         self.b2.pack(side="left", padx=1)
@@ -511,7 +516,7 @@ class Plots(tk.Frame):
             self.ax[i].set_xlim(self.xmin, self.max)
 
             # top axis
-            self.axC[i].set_xlabel(u"Temperature, T (\u2103)")
+            self.axC[i].set_xlabel("Temperature, T (\u2103)")
             self.axC[i].set_xlim(self.xmin, self.max)
 
             # redo the top ticks so that they line up with proper positions for Celsius
@@ -679,7 +684,7 @@ class EditMaterials(tk.Toplevel):
         tk.Label(parent, text="Solubility").grid(row=0, column=4)
         self.add_entry(self, parent, variable=self.inputs, key="K0", text="K", innersubscript="0", innertext=":",
                        subscript="", tvar=self.K0,
-                       units=u"[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]",  # mol m^-3 Pa^-0.5
+                       units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]",  # mol m^-3 Pa^-0.5
                        row=1, column=3, in_window=True,
                        command=lambda tvar, variable, key, pf: self.calc_DKP(tvar, variable, key, pf))
         self.add_entry(self, parent, variable=self.inputs, key="E_K", text="E", innersubscript="K", innertext=":",
@@ -694,12 +699,12 @@ class EditMaterials(tk.Toplevel):
                        command=lambda tvar, variable, key, pf: self.calc_tmax(tvar, variable, key, pf))
 
         tk.Label(parent, text="Permeability").grid(row=0, column=7)
-        self.add_entry(self, parent, variable=self.inputs, key="P0", text="P", innersubscript="0", innertext=":",
+        self.add_entry(self, parent, variable=self.inputs, key="P0", text="\u03A6", innersubscript="0", innertext=":",
                        subscript="", tvar=self.P0,  # units=[mol m^-1 s^-1 Pa^-0.5]
-                       units=u"[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
+                       units="[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
                        row=1, column=6, in_window=True,
                        command=lambda tvar, variable, key, pf: self.calc_DKP(tvar, variable, key, pf))
-        self.add_entry(self, parent, variable=self.inputs, key="E_P", text="E", innersubscript="P", innertext=":",
+        self.add_entry(self, parent, variable=self.inputs, key="E_P", text="E", innersubscript="\u03A6", innertext=":",
                        subscript="", tvar=self.E_P, units="[kJ mol\u207b\u00b9]",  # [kJ mol^-1]
                        row=2, column=6, in_window=True,
                        command=lambda tvar, variable, key, pf: self.calc_E(tvar, variable, key, pf))
