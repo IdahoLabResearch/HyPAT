@@ -7,7 +7,7 @@
     compatible: macOS and Windows 10 """
 from source_code.application import Application
 
-
+# . Testing new branch
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     app = Application()
