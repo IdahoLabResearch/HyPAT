@@ -14,10 +14,10 @@ prepare permeation experiment estimates, quickly analyze multiple data files, an
 Features:
 
 * Calculates the hydrogen transport properties of permeability, diffusivity, and solubility from experimental pressure-rise permeation data.
-* Calculates the hydrogen transport properties of permeability, diffusivity, and solubility from experimental Sieverts'-type apparatus-based absorption data
+* Calculates the hydrogen transport properties of permeability, diffusivity, and solubility from experimental absorption data obtained from a Sieverts'-type apparatus.
 * Batchwise data analysis of multiple files.
 * Direct comparison of measured hydrogen transport properties to known literature values.
-* Predicts the permeation rates and diffusion times of experiments.
+* Predicts the permeation rates and diffusion times of permeation experiments.
 * Easily customizable to adapt to user needs and experimental setups.
 
 ## Examples of usage of HyPAT 
@@ -58,19 +58,19 @@ Specifically, the following parameters are editable:
 * The row at which the program starts reading data from the Excel sheet,
 * The number of rows at the end of the Excel sheet to ignore when reading data,
 * The number of thermocouples used to measure the gas temperature,
-* Conversion factors for each instrument to allow the user to update for appropriate unit conversions,
+* Conversion factors for each instrument to facilitate appropriate unit conversions,
 * Constant and proportional errors of each instrument.
 
 ###  Usage: Data Analysis with "Absorption Plots" Tab
 
 This tab is similar to the "Permeation Plots" tab. It calculates the hydrogen transport properties permeability, 
-diffusivity, and solubility from experimental absorption data using a Sieverts'-type apparatus while allowing for 
-batchwise data analysis of multiple files. The required user inputs and associated errors are highlighted in yellow. 
-Thickness (mm), mass (g), volume (cm<sup>3</sup>), and molar mass (g mol<sup>-1</sup>) are the required sample properties. 
-The experimental apparatus parameters are the initial container volume (cm<sup>3</sup>) and final container volume 
-(cm<sup>3</sup>). HyPAT also requires the user to submit whether the experiment type is "Single," meaning each data file 
-has the sample measured at only one pressure, or "Isotherm," meaning at least one data file has the sample measured at 
-multiple pressures.
+diffusivity, and solubility from experimental absorption data obtained using a Sieverts'-type apparatus. HyPAT does this 
+while allowing for batchwise data analysis of multiple files. The required user inputs and associated errors are 
+highlighted in yellow. Thickness (mm), mass (g), volume (cm<sup>3</sup>), and molar mass (g mol<sup>-1</sup>) are the 
+required sample properties. The required experimental apparatus parameters are the initial container volume 
+(cm<sup>3</sup>) and final container volume (cm<sup>3</sup>). HyPAT also requires the user to submit whether the 
+experiment type is "Single," meaning each data file has the sample measured at only one pressure, or "Isotherm," 
+meaning at least one data file has the sample measured at multiple pressures.
 
 Clicking the “Equilibrium Variables” button immediately beneath the top-right plot allows the user to edit the 
 tolerance for determining equilibrium, the delay until equilibrium, the number of points used to find the equilibrium, 
@@ -87,11 +87,13 @@ such that the data of each instrument (or set of instruments) has its own column
 
 The bottom left graph displays the solubility calculated from each data set plotted against temperature. Use the 
 “Current Measurement” drop-down menu to change to the diffusivity or permeability calculated from each file plotted 
-against temperature.
+against temperature. The bottom middle graph displays the final pressure of each data set plotted against the final 
+composition. The points are color coded according to final sample temperature, yielding a pressure-composition-temperature 
+plot
 
-Also visible are a raw data plot, a pressure-composition-temperature plot, and a comparison of different diffusivity 
-optimizations plot, all using data from the first file in the selected folder. Use the “Current File” drop-down menu to 
-use data from a different file for the raw data and diffusivity comparison plots.
+Also visible are a raw data plot and a comparison of different diffusivity optimizations plot, each using data from the 
+first file in the selected folder. Use the “Current File” drop-down menu to use data from a different file for the raw 
+data and diffusivity comparison plots.
 
 By clicking the “Settings” button, you gain the ability to edit some of how the program processes the data. 
 Specifically, the following parameters are editable:
@@ -100,7 +102,7 @@ Specifically, the following parameters are editable:
 * The row at which the program starts reading data from the Excel sheet,
 * The number of rows at the end of the Excel sheet to ignore when reading data,
 * The number of thermocouples used to measure the gas temperature initially and after the isolation valve is opened,
-* Conversion factors for each instrument to allow the user to update for appropriate unit conversions,
+* Conversion factors for each instrument to facilitate appropriate unit conversions,
 * Constant and proportional errors of each instrument.
 
 ### Usage: Comparison with Literature Values with "Overview Plots" Tab
@@ -133,16 +135,19 @@ Material” button on the "Overview Plots" tab.
 
 ## Installation Instructions
 
-1.	Select the button “Code” near the top of this directory
-2.	Select “Download ZIP” from the dropdown menu that appears
-3.	Extract the downloaded file to a folder of your choice
-4.	Open the command line, then move to the directory “HyPAT” within the downloaded folder
+1.	Select the button “Code” near the top of this directory.
+2.	Select “Download ZIP” from the dropdown menu that appears.
+3.	Extract the downloaded file to a folder of your choice.
+4.	Open the command line, then move to the directory “HyPAT” within the downloaded folder.
 5.	Run the following code to open the application: python main.py
-   * This may require the following code instead: python3 main.py
-   * The terminal may prompt you to download Python packages. 
-   * Note that these instructions assume you already have Python installed.
+ 
+* Note:
+  * Your system may require the following code instead: python3 main.py
+  * These instructions assume you already have Python and the required Python packages installed.
 
-Required Python Packages: matplotlib, pandas, numpy, tkmacosx, mplcursors, scipy, and openpyxl
+Python Interpreter: 3.8, 3.9, or 3.10
+
+Python Packages: matplotlib, pandas, numpy, tkmacosx, mplcursors, scipy, and openpyxl
 
 Compatible: macOS and Windows 10
 
