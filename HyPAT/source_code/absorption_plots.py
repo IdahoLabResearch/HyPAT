@@ -88,8 +88,8 @@ class AbsorptionPlots(tk.Frame):
         self.Vs_cm3_err = tk.DoubleVar(value=round(self.Vs_cm3.get() * 0.05, 13))
         self.Vic_cm3 = tk.DoubleVar(value=379.0)  # Volume of initial container
         self.Vic_cm3_err = tk.DoubleVar(value=round(self.Vic_cm3.get() * 0.05, 13))
-        self.Vtc_cm3 = tk.DoubleVar(value=66.4)  # cm^3 Volume of test container
-        self.Vtc_cm3_err = tk.DoubleVar(value=round(self.Vtc_cm3.get() * 0.05, 13))
+        self.Vsc_cm3 = tk.DoubleVar(value=66.4)  # cm^3 Volume of sample container
+        self.Vsc_cm3_err = tk.DoubleVar(value=round(self.Vsc_cm3.get() * 0.05, 13))
         self.ms_g = tk.DoubleVar(value=1)  # g Mass of sample
         self.ms_g_err = tk.DoubleVar(value=round(self.ms_g.get() * 0.05, 13))
         # todo Uncomment self.rhos_gcm3 and self.rho_gcm3_err here and elsewhere, then connect them to the code so they
@@ -99,14 +99,14 @@ class AbsorptionPlots(tk.Frame):
         #                                               np.sqrt((self.ms_g_err.get() / self.ms_g.get()) ** 2
         #                                                       + (self.Vs_cm3_err.get() / self.Vs_cm3.get())** 2), 13))
         self.exp_type = tk.StringVar(value="Single")
-        self.amu = tk.DoubleVar(value=50.9440)  # g/mol default amu
+        self.molar_mass = tk.DoubleVar(value=50.9440)  # g/mol default molar_mass
         # Variables for determining initial and final values
         self.e_tol = tk.DoubleVar(value=self.storage.tol.get())  # Tolerance for equilibrium
         self.e_t_del = tk.DoubleVar(value=0)  # Minimum time after t0 before looking for eq.
-        self.i_range = {}  # Dict for holding the range used in finding initial variables for each file
-        self.e_range = {}  # Dict for holding the range used in finding eq and eq variables for each file
-        self.gen_i_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to find initial vars over
-        self.gen_e_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to find eq and eq vars over
+        self.i_range = {}  # Dict for holding the range used in finding initial values for each file
+        self.e_range = {}  # Dict for holding the range used in finding eq and eq value for each file
+        self.gen_i_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to find initial vals over
+        self.gen_e_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to find eq and eq vals over
 
         # absorption variables
         self.p_num = {}  # number of pressures
@@ -183,8 +183,8 @@ class AbsorptionPlots(tk.Frame):
                         row=entry_row)
         entry_row += 1
 
-        self.add_entry3(self, self.frame, variable=self.inputs, key="Vtc_cm3", text="Test Container Volume: V",
-                        subscript="tc", tvar1=self.Vtc_cm3, tvar2=self.Vtc_cm3_err, units="[cm\u00B3]",  # "[cm^3]"
+        self.add_entry3(self, self.frame, variable=self.inputs, key="Vsc_cm3", text="Sample Container Volume: V",
+                        subscript="tc", tvar1=self.Vsc_cm3, tvar2=self.Vsc_cm3_err, units="[cm\u00B3]",  # "[cm^3]"
                         update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
                         row=entry_row)
         entry_row += 1
@@ -239,13 +239,14 @@ class AbsorptionPlots(tk.Frame):
         self.experiment_type_menu.grid(row=1, column=sidecol, columnspan=4,
                                        sticky="ew")
 
-        self.amuframe = tk.Frame(self.frame)
-        self.amuframe.grid(row=2, column=sidecol, sticky="w")
-        self.add_entry(self, self.amuframe, variable=self.inputs, key="amu", text="amu:", subscript="",
-                       units="g/mol", tvar=self.amu, row=0,
+        self.add_text0(self.frame, text="Sample Molar Mass:", subscript="", row=2, column=sidecol, sticky="w")
+        mm_frame = tk.Frame(self.frame)  # Frame for the molar mass
+        mm_frame.grid(row=3, column=sidecol, sticky="w")
+        self.add_entry(self, mm_frame, variable=self.inputs, key="molar_mass", text="", subscript="",
+                       units="[g/mol]", tvar=self.molar_mass, row=1,
                        command=lambda tvar, variable, key: self.storage.check_for_number(tvar, variable, key))
-        self.amuframe.columnconfigure((0, 2), weight=1)
-        self.inputs['amu'].config(width=10)
+        mm_frame.columnconfigure((0, 2), weight=1)
+        self.inputs['molar_mass'].config(width=10)
 
         self.npframe = tk.Frame(self.frame)
         self.npframe.grid(row=4, column=sidecol, sticky="w")
@@ -255,7 +256,7 @@ class AbsorptionPlots(tk.Frame):
         tk.Label(self.npframe, text="  ").grid(row=0, column=2, sticky='w')  # Give the label some right-side padding
         self.npframe.columnconfigure(0, weight=1)
 
-        button_row = 6
+        button_row = 7
         ttk.Style(self).configure('Tight.TButton', width="")  # Remove the extra space from the button
 
         self.b0 = ttk.Button(self.frame, text='Choose folder', command=self.select_file)
@@ -286,7 +287,7 @@ class AbsorptionPlots(tk.Frame):
 
         # create bottom left plot
         self.ax_title = "Solubility vs Temperature"
-        self.ax_xlabel = "Temperature (\u2103)"
+        self.ax_xlabel = "Temperature (\u00B0C)"
         self.ax_ylabel = "Solubility (mol m$^{-3}$ Pa$^{-0.5}$)"
         self.fig, self.ax, self.canvas, self.toolbar = self.add_plot(self.bottom_frame,
                                                                      xlabel=self.ax_xlabel,
@@ -297,7 +298,7 @@ class AbsorptionPlots(tk.Frame):
         self.ax1_title = "Raw Data"
         self.ax1_xlabel = "Time (s)"
         self.ax1_ylabel = "Pressure (Pa)"
-        self.ax12_ylabel = "Temperature (\u2103)"
+        self.ax12_ylabel = "Temperature (\u00B0C)"
         self.fig1, self.ax1, self.canvas1, self.toolbar1 = self.add_plot(self.top_frame,
                                                                          xlabel=self.ax1_xlabel,
                                                                          ylabel=self.ax1_ylabel,
@@ -751,9 +752,9 @@ class AbsorptionPlots(tk.Frame):
 
     def get_persistent_vars(self):
         """ Read data from persistent_absorption_input_variables.xlsx. This data is critical to processing the
-            datafiles loaded in by the user. """
+            data files loaded in by the user. """
         # Open up the persistent variable file for reading
-        pv_filename = os.path.join('datafiles', 'persistent_absorption_input_variables.xlsx')
+        pv_filename = os.path.join('data_files', 'persistent_absorption_input_variables.xlsx')
         pv_wb = openpyxl.load_workbook(pv_filename)
 
         self.num_GasT0 = pv_wb['Numbers']['C2'].value  # Number of TCs measuring GasT initial
@@ -958,13 +959,13 @@ class AbsorptionPlots(tk.Frame):
                        tvar=self.e_t_del, ent_w=8, row=1, in_window=True,
                        command=lambda tvar, variable, key, pf:
                        self.storage.check_for_number(tvar, variable, key, False, pf))  # "false" to say no formatting
-        # Number of data points used in determining the initial variables
+        # Number of data points used in determining the initial values
         self.add_entry(popup, entry_frame, self.inputs, key="i_range",
-                       text="Initial Variables Range:", subscript='', units="data points",
+                       text="Initial Values Range:", subscript='', units="data points",
                        tvar=self.gen_i_range, ent_w=8, row=3, in_window=True,
                        command=lambda tvar, variable, key, pf:
                        self.storage.check_for_number(tvar, variable, key, False, pf))
-        # Number of data points used in determining the equilibrium and max time and final variables
+        # Number of data points used in determining the equilibrium and max time and final values
         self.add_entry(popup, entry_frame, self.inputs, key="e_range",
                        text="Equilibrium Range:", subscript='', units="data points",
                        tvar=self.gen_e_range, ent_w=8, row=4, in_window=True,
@@ -989,10 +990,10 @@ class AbsorptionPlots(tk.Frame):
         Vs_err = self.Vs_cm3_err.get() * 10 ** (-6)  # m^3
         V_ic = self.Vic_cm3.get() * 10 ** (-6)  # m^3
         V_ic_err = self.Vic_cm3_err.get() * 10 ** (-6)  # m^3
-        V_tc = self.Vtc_cm3.get() * 10 ** (-6) - Vs  # m^3 Note the correction for the sample's volume
-        V_tc_err = self.Vtc_cm3_err.get() * 10 ** (-6)  # m^3
-        V_totc = V_ic + V_tc  # m^3, total container
-        V_totc_err = np.sqrt(V_ic_err ** 2 + V_tc_err ** 2)  # m^3
+        V_sc = self.Vsc_cm3.get() * 10 ** (-6) - Vs  # m^3 Note the correction for the sample's volume
+        V_sc_err = self.Vsc_cm3_err.get() * 10 ** (-6)  # m^3
+        V_totc = V_ic + V_sc  # m^3, total container
+        V_totc_err = np.sqrt(V_ic_err ** 2 + V_sc_err ** 2)  # m^3
 
         # Set the init range to the general init range (which is editable by the user) or to something that works better
         if self.gen_i_range.get() < self.t0[filename]:
@@ -1167,8 +1168,8 @@ class AbsorptionPlots(tk.Frame):
         self.pr_e_err[filename] = Pres_e_err
 
         # Data for pressure vs composition graph
-        NA = self.storage.Na  # number of atoms per mole, Avogadro's constant
-        a_num = self.ms_g.get() * NA / self.amu.get()  # number of atoms of metal
+        NA = self.storage.Na  # number of atoms per mole, the Avogadro constant
+        a_num = self.ms_g.get() * NA / self.molar_mass.get()  # number of atoms of metal
         H_num = self.ns_e[filename] * NA  # Number of Hydrogen atoms in the sample
         self.HM[filename] = H_num / a_num  # Hydrogen to metal atoms ratio
         self.HM_err[filename] = abs(self.HM[filename]) * np.sqrt((self.ms_g_err.get()/self.ms_g.get()) ** 2 +
@@ -1406,7 +1407,7 @@ class AbsorptionPlots(tk.Frame):
 
     def pres_comp_temp_plot(self, fig2, ax2):
         """ Creates the pressure vs composition (bottom middle) plot and color codes using temperature """
-        # Group datafiles according to their temperature to the tens place
+        # Group data files according to their temperature to the tens place
         approx_temps = {}
         for filename in self.datafiles.keys():
             approx_temps[filename] = round(self.Ts_e[filename] - self.storage.standard_temp, -1)
@@ -1414,7 +1415,7 @@ class AbsorptionPlots(tk.Frame):
         # https://www.geeksforgeeks.org/python-sort-python-dictionaries-by-key-or-value/
         sorted_temps = sorted(approx_temps.items(), key=lambda kv: (kv[1], kv[0]))
         sorted_names = []  # Store sorted filenames
-        # Assign colors to datafiles according to their group
+        # Assign colors to data files according to their group
         old_temp = 0
         base_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
                        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
@@ -1426,7 +1427,7 @@ class AbsorptionPlots(tk.Frame):
             if new_temp != old_temp:  # if the temperature of the latest datafile is different from the last datafile
                 color_index += 1  # Move to next color in the color list
                 color_index %= 10  # Cycle back to beginning if reached the end of the color list
-                legend_plots.append([i, str(new_temp) + " \u2103"])  # Keep track of which artists will be in the legend
+                legend_plots.append([i, str(new_temp) + " \u00B0C"])  # Keep track of which artists will be in the legend
             tempe_color[tup[0]] = base_colors[color_index]  # Set what color the datapoint will be
             old_temp = new_temp
             sorted_names.append(tup[0])
@@ -1437,7 +1438,7 @@ class AbsorptionPlots(tk.Frame):
             x = self.HM[filename]  # Hydrogen to metal atoms ratio
             T = self.Ts_e[filename] - self.storage.standard_temp  # degrees C
             label = f'{filename}\nComposition={x:.3e} H/M' + \
-                    f'\nTemperature={T:.3e} \u2103\nPressure={y:.3e} Pa'
+                    f'\nTemperature={T:.3e} \u00B0C\nPressure={y:.3e} Pa'
 
             a = ax2.errorbar(x, y, yerr=self.pr_e_err[filename],
                              xerr=self.HM_err[filename], marker='o', label=label, color=tempe_color[filename])
@@ -1499,17 +1500,17 @@ class AbsorptionPlots(tk.Frame):
                 y = self.Phi[filename]
                 yerr = self.Phi_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' mol m$^{-1}\,$s$^{-1}\,$Pa$^{-0.5}$' + \
-                        f'\nTemperature={x:.3e} \u2103\nPressure={p:.3e} Pa'
+                        f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
             elif plot == "Diffusivity":
                 y = self.D[filename]
                 yerr = self.D_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' m$^{2}\,$s$^{-1}$' + \
-                        f'\nTemperature={x:.3e} \u2103\nPressure={p:.3e} Pa'
+                        f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
             elif plot == "Solubility":
                 y = self.Ks[filename]
                 yerr = self.Ks_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' mol m$^{-3}\,$Pa$^{-0.5}$' + \
-                        f'\nTemperature={x:.3e} \u2103\nPressure={p:.3e} Pa'
+                        f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
             else:
                 # This shouldn't be possible
                 showerror("Selection Error", "Error, you should have selected Permeability, Diffusivity, Solubility.")
@@ -1602,7 +1603,7 @@ class AdjustPVars(tk.Toplevel):
         self.changed = False  # Boolean of whether edits have been made that require plot refreshing
 
         # Get the path for the persistent variable file
-        self.pv_filename = os.path.join('datafiles', 'persistent_absorption_input_variables.xlsx')
+        self.pv_filename = os.path.join('data_files', 'persistent_absorption_input_variables.xlsx')
 
         # Read the Excel sheets into dataframes for easier access
         self.numbers_info = pd.read_excel(self.pv_filename, sheet_name="Numbers", header=0)
@@ -1857,7 +1858,7 @@ class AdjustPVars(tk.Toplevel):
         # Add entries for arbitrarily many instruments measuring GasT
         for GasT_inst in self.GasT_info.keys():
             entry_col += 3
-            tk.Label(parent, text="{} [\u2103]".format(GasT_inst)).grid(row=row2entries, column=entry_col + 1)
+            tk.Label(parent, text="{} [\u00B0C]".format(GasT_inst)).grid(row=row2entries, column=entry_col + 1)
             self.add_entry(self, parent, variable=self.inputs, key="col_{}".format(GasT_inst), text="col",
                            innersubscript="{}".format(GasT_inst), innertext=":",
                            subscript="", tvar=self.col_GasT[GasT_inst], units="", ent_w=entry_w,
@@ -1865,19 +1866,19 @@ class AdjustPVars(tk.Toplevel):
                            command=lambda tvar, variable, key: self.check_col_names(tvar, variable, key))
             self.add_entry(self, parent, variable=self.inputs, key="m_{}".format(GasT_inst), text="m",
                            innersubscript="{}".format(GasT_inst), innertext=":",
-                           subscript="", tvar=self.m_GasT[GasT_inst], units="[\u2103/?]", ent_w=entry_w,
+                           subscript="", tvar=self.m_GasT[GasT_inst], units="[\u00B0C/?]", ent_w=entry_w,
                            row=row2entries + 2, column=entry_col, in_window=True,
                            command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                                  parent_frame=pf))
             self.add_entry(self, parent, variable=self.inputs, key="b_{}".format(GasT_inst), text="b",
                            innersubscript="{}".format(GasT_inst), innertext=":",
-                           subscript="", tvar=self.b_GasT[GasT_inst], units="[\u2103]", ent_w=entry_w,
+                           subscript="", tvar=self.b_GasT[GasT_inst], units="[\u00B0C]", ent_w=entry_w,
                            row=row2entries + 3, column=entry_col, in_window=True,
                            command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                                  parent_frame=pf))
             self.add_entry(self, parent, variable=self.inputs, key="cerr_{}".format(GasT_inst), text="cerr",
                            innersubscript="{}".format(GasT_inst), innertext=":",
-                           subscript="", tvar=self.cerr_GasT[GasT_inst], units="[\u2103]", ent_w=entry_w,
+                           subscript="", tvar=self.cerr_GasT[GasT_inst], units="[\u00B0C]", ent_w=entry_w,
                            row=row2entries + 4, column=entry_col, in_window=True,
                            command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                                  parent_frame=pf))
@@ -1890,23 +1891,23 @@ class AdjustPVars(tk.Toplevel):
 
         # Sample temperature
         entry_col += 3
-        tk.Label(parent, text="SampT [\u2103]").grid(row=row2entries, column=entry_col + 1)
+        tk.Label(parent, text="SampT [\u00B0C]").grid(row=row2entries, column=entry_col + 1)
         self.add_entry(self, parent, variable=self.inputs, key="col_SampT", text="col", innersubscript="SampT",
                        innertext=":", subscript="", tvar=self.col_SampT, units="", ent_w=entry_w,
                        row=row2entries + 1, column=entry_col,
                        command=lambda tvar, variable, key: self.check_col_names(tvar, variable, key))
         self.add_entry(self, parent, variable=self.inputs, key="m_SampT", text="m", innersubscript="SampT",
-                       innertext=":", subscript="", tvar=self.m_SampT, units="[\u2103/?]", ent_w=entry_w,
+                       innertext=":", subscript="", tvar=self.m_SampT, units="[\u00B0C/?]", ent_w=entry_w,
                        row=row2entries + 2, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
         self.add_entry(self, parent, variable=self.inputs, key="b_SampT", text="b", innersubscript="SampT",
-                       innertext=":", subscript="", tvar=self.b_SampT, units="[\u2103]", ent_w=entry_w,
+                       innertext=":", subscript="", tvar=self.b_SampT, units="[\u00B0C]", ent_w=entry_w,
                        row=row2entries + 3, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
         self.add_entry(self, parent, variable=self.inputs, key="cerr_SampT", text="cerr", innersubscript="SampT",
-                       innertext=":", subscript="", tvar=self.cerr_SampT, units="[\u2103]", ent_w=entry_w,
+                       innertext=":", subscript="", tvar=self.cerr_SampT, units="[\u00B0C]", ent_w=entry_w,
                        row=row2entries + 4, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
@@ -2094,7 +2095,7 @@ class APSettingsHelp(tk.Toplevel):
         td = {}
         tdt = {}
         for item in (" ", "t [s]: ", "Pres [Pa]: ", "Isolation Valve [1/0]: ", "Starting Row: ", "Rows in Footer: ",
-                     "GasT [\u2103]: ", "SampT [\u2103]: ", "col: ", "m: ", "b: ", "cerr: ", "perr: "):
+                     "GasT [\u00B0C]: ", "SampT [\u00B0C]: ", "col: ", "m: ", "b: ", "cerr: ", "perr: "):
             td[item] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
             tdt[item + "text"] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
 
@@ -2119,23 +2120,23 @@ class APSettingsHelp(tk.Toplevel):
                                                    "sheet (0-indexed). HyPAT assumes the data file has no header, so " +
                                                    "use this to start analysis after the header.")
         tdt["Rows in Footer: text"].insert("insert", "How many rows at the bottom of the file to ignore.")
-        tdt["GasT [\u2103]: text"].insert("insert", "The thermocouples (TCs) that measure the gas's temperature. " +
+        tdt["GasT [\u00B0C]: text"].insert("insert", "The thermocouples (TCs) that measure the gas's temperature. " +
                                                     "The number of TCs can be set arbitrarily via " +
                                                     "'Number of TCs measuring GasT0' and 'Number of TCs measuring " +
                                                     "GasT,' each of which start counting with GasT1.")
-        tdt["SampT [\u2103]: text"].insert("insert", "The thermocouple that measures the sample temperature.")
-        tdt["col: text"].insert("insert", "Reference column for corresponding variable in raw data file.")
+        tdt["SampT [\u00B0C]: text"].insert("insert", "The thermocouple that measures the sample temperature.")
+        tdt["col: text"].insert("insert", "Reference column for corresponding quantity in raw data file.")
         tdt["m: text"].insert("insert", "Every entry in the column of data is converted according to m*x + b, " +
                                         "where x is the entry in the column. Use this to convert the column's data " +
                                         "to SI units.")
         tdt["b: text"].insert("insert", "See entry for 'm' above.")
-        tdt["cerr: text"].insert("insert", "Constant uncertainty of the instrument, e.g., +/- 2\u2103. " +
+        tdt["cerr: text"].insert("insert", "Constant uncertainty of the instrument, e.g., +/- 2\u00B0C. " +
                                            "When calculating the uncertainty caused by each instrument, the " +
                                            "application chooses the largest out of the constant uncertainty, the " +
                                            "proportional uncertainty (see below), and the calculated statistical " +
                                            "uncertainty.")
         tdt["perr: text"].insert("insert", "Proportional uncertainty of the instrument, e.g., " +
-                                           "+/- 0.75% of the measurement (in \u2103).")
+                                           "+/- 0.75% of the measurement (in \u00B0C).")
 
         # Configure each text widget
         for i, symbol in enumerate(td):

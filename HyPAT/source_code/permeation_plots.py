@@ -89,8 +89,8 @@ class PermeationPlots(tk.Frame):
         self.volume = tk.DoubleVar(value=(self.storage.defaults_info["Secondary Side Volume [cc]"][0]) * 10 ** -6)
         self.ss_tol = tk.DoubleVar(value=self.storage.tol.get())  # Tolerance for finding the steady state
         self.ss_t_del = tk.DoubleVar(value=self.storage.t_del.get())  # Minimum time after t0 before looking for ss
-        self.leak_range = {}  # Dict for holding the range used in finding leaks and initial variables for each file
-        self.ss_range = {}  # Dict for holding the range used in finding ss and ss variables for each file
+        self.leak_range = {}  # Dict for holding the range used in finding leaks and initial values for each file
+        self.ss_range = {}  # Dict for holding the range used in finding ss and ss values for each file
         self.gen_leak_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to determine leak over
         self.gen_ss_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to determine ss over
         # default area is the inner area of the default O-ring
@@ -222,7 +222,7 @@ class PermeationPlots(tk.Frame):
 
         # create bottom left plot
         self.ax_title = "Permeability vs Temperature"
-        self.ax_xlabel = "Temperature (\u2103)"
+        self.ax_xlabel = "Temperature (\u00B0C)"
         self.ax_ylabel = "Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
         self.fig, self.ax, self.canvas, self.toolbar = self.add_plot(self.bottom_frame,
                                                                      xlabel=self.ax_xlabel,
@@ -251,7 +251,7 @@ class PermeationPlots(tk.Frame):
         self.ax2_title = "Permeability vs Time"
         self.ax2_xlabel = "Time (s)"
         self.ax2_ylabel = r"Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
-        self.ax22_ylabel = "Sample Temperature (\u2103)"
+        self.ax22_ylabel = "Sample Temperature (\u00B0C)"
         self.fig2, self.ax2, self.canvas2, self.toolbar2 = self.add_plot(self.bottom_frame,
                                                                          xlabel=self.ax2_xlabel,
                                                                          ylabel=self.ax2_ylabel,
@@ -658,9 +658,9 @@ class PermeationPlots(tk.Frame):
 
     def get_persistent_vars(self):
         """ Read data from persistent_permeation_input_variables.xlsx. This data is critical to processing the
-            datafiles loaded in by the user. """
+            data files loaded in by the user. """
         # Open up the persistent variable file for reading
-        pv_filename = os.path.join('datafiles', 'persistent_permeation_input_variables.xlsx')
+        pv_filename = os.path.join('data_files', 'persistent_permeation_input_variables.xlsx')
         pv_wb = openpyxl.load_workbook(pv_filename)
 
         self.num_GasT = pv_wb['Numbers']['C2'].value  # Number of TCs measuring GasT
@@ -1501,17 +1501,17 @@ class PermeationPlots(tk.Frame):
                 y = self.Phi[filename]
                 yerr = self.Phi_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' mol m$^{-1}\,$s$^{-1}\,$Pa$^{-0.5}$' + \
-                        f'\nTemperature={x:.3e} \u2103\nPressure={p:.3e} Pa'
+                        f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
             elif plot == "Diffusivity":
                 y = self.D[filename]
                 yerr = self.D_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' m$^{2}\,$s$^{-1}$' + \
-                        f'\nTemperature={x:.3e} \u2103\nPressure={p:.3e} Pa'
+                        f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
             elif plot == "Solubility":
                 y = self.Ks[filename]
                 yerr = self.Ks_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' mol m$^{-3}\,$Pa$^{-0.5}$' + \
-                        f'\nTemperature={x:.3e} \u2103\nPressure={p:.3e} Pa'
+                        f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
             elif plot == "Flux":
                 y = self.F[filename]
                 yerr = self.F_err[filename]
@@ -1610,7 +1610,7 @@ class AdjustPVars(tk.Toplevel):
         self.changed = False  # Boolean of whether edits have been made that require plot refreshing
 
         # Get the path for the persistent variable file
-        self.pv_filename = os.path.join('datafiles', 'persistent_permeation_input_variables.xlsx')
+        self.pv_filename = os.path.join('data_files', 'persistent_permeation_input_variables.xlsx')
 
         # Read the Excel sheets into dataframes for easier access
         self.numbers_info = pd.read_excel(self.pv_filename, sheet_name="Numbers", header=0)
@@ -1880,7 +1880,7 @@ class AdjustPVars(tk.Toplevel):
         # Add entries for arbitrarily many instruments measuring GasT
         for GasT_inst in self.GasT_info.keys():
             entry_col += 3
-            tk.Label(parent, text="{} [\u2103]".format(GasT_inst)).grid(row=row2entries, column=entry_col + 1)
+            tk.Label(parent, text="{} [\u00B0C]".format(GasT_inst)).grid(row=row2entries, column=entry_col + 1)
             self.add_entry(self, parent, variable=self.inputs, key="col_{}".format(GasT_inst), text="col",
                            innersubscript="{}".format(GasT_inst), innertext=":",
                            subscript="", tvar=self.col_GasT[GasT_inst], units="", ent_w=entry_w,
@@ -1888,19 +1888,19 @@ class AdjustPVars(tk.Toplevel):
                            command=lambda tvar, variable, key: self.check_col_names(tvar, variable, key))
             self.add_entry(self, parent, variable=self.inputs, key="m_{}".format(GasT_inst), text="m",
                            innersubscript="{}".format(GasT_inst), innertext=":",
-                           subscript="", tvar=self.m_GasT[GasT_inst], units="[\u2103/?]", ent_w=entry_w,
+                           subscript="", tvar=self.m_GasT[GasT_inst], units="[\u00B0C/?]", ent_w=entry_w,
                            row=row2entries + 2, column=entry_col, in_window=True,
                            command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                                  parent_frame=pf))
             self.add_entry(self, parent, variable=self.inputs, key="b_{}".format(GasT_inst), text="b",
                            innersubscript="{}".format(GasT_inst), innertext=":",
-                           subscript="", tvar=self.b_GasT[GasT_inst], units="[\u2103]", ent_w=entry_w,
+                           subscript="", tvar=self.b_GasT[GasT_inst], units="[\u00B0C]", ent_w=entry_w,
                            row=row2entries + 3, column=entry_col, in_window=True,
                            command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                                  parent_frame=pf))
             self.add_entry(self, parent, variable=self.inputs, key="cerr_{}".format(GasT_inst), text="cerr",
                            innersubscript="{}".format(GasT_inst), innertext=":",
-                           subscript="", tvar=self.cerr_GasT[GasT_inst], units="[\u2103]", ent_w=entry_w,
+                           subscript="", tvar=self.cerr_GasT[GasT_inst], units="[\u00B0C]", ent_w=entry_w,
                            row=row2entries + 4, column=entry_col, in_window=True,
                            command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                                  parent_frame=pf))
@@ -1913,23 +1913,23 @@ class AdjustPVars(tk.Toplevel):
 
         # Sample temperature
         entry_col += 3
-        tk.Label(parent, text="SampT [\u2103]").grid(row=row2entries, column=entry_col + 1)
+        tk.Label(parent, text="SampT [\u00B0C]").grid(row=row2entries, column=entry_col + 1)
         self.add_entry(self, parent, variable=self.inputs, key="col_SampT", text="col", innersubscript="SampT",
                        innertext=":", subscript="", tvar=self.col_SampT, units="", ent_w=entry_w,
                        row=row2entries + 1, column=entry_col,
                        command=lambda tvar, variable, key: self.check_col_names(tvar, variable, key))
         self.add_entry(self, parent, variable=self.inputs, key="m_SampT", text="m", innersubscript="SampT",
-                       innertext=":", subscript="", tvar=self.m_SampT, units="[\u2103/?]", ent_w=entry_w,
+                       innertext=":", subscript="", tvar=self.m_SampT, units="[\u00B0C/?]", ent_w=entry_w,
                        row=row2entries + 2, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
         self.add_entry(self, parent, variable=self.inputs, key="b_SampT", text="b", innersubscript="SampT",
-                       innertext=":", subscript="", tvar=self.b_SampT, units="[\u2103]", ent_w=entry_w,
+                       innertext=":", subscript="", tvar=self.b_SampT, units="[\u00B0C]", ent_w=entry_w,
                        row=row2entries + 3, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
         self.add_entry(self, parent, variable=self.inputs, key="cerr_SampT", text="cerr", innersubscript="SampT",
-                       innertext=":", subscript="", tvar=self.cerr_SampT, units="[\u2103]", ent_w=entry_w,
+                       innertext=":", subscript="", tvar=self.cerr_SampT, units="[\u00B0C]", ent_w=entry_w,
                        row=row2entries + 4, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
@@ -2140,7 +2140,7 @@ class PPSettingsHelp(tk.Toplevel):
         td = {}
         tdt = {}
         for item in (" ", "t [s]: ", "PrimP [Pa]: ", "SecP [Pa]: ", "Isolation Valve [1/0]: ", "Starting Row: ",
-                     "Rows in Footer: ", "GasT [\u2103]: ", "SampT [\u2103]: ", "col: ", "m: ", "b: ", "cerr: ",
+                     "Rows in Footer: ", "GasT [\u00B0C]: ", "SampT [\u00B0C]: ", "col: ", "m: ", "b: ", "cerr: ",
                      "perr: "):
             td[item] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
             tdt[item + "text"] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
@@ -2167,22 +2167,22 @@ class PPSettingsHelp(tk.Toplevel):
                                                    "sheet (0-indexed). HyPAT assumes the data file has no header, so " +
                                                    "use this to start analysis after the header.")
         tdt["Rows in Footer: text"].insert("insert", "How many rows at the bottom of the file to ignore.")
-        tdt["GasT [\u2103]: text"].insert("insert", "The thermocouples (TCs) that measure the gas's temperature. " +
+        tdt["GasT [\u00B0C]: text"].insert("insert", "The thermocouples (TCs) that measure the gas's temperature. " +
                                                     "The number of TCs can be set arbitrarily via " +
                                                     "'Number of TCs measuring GasT.'")
-        tdt["SampT [\u2103]: text"].insert("insert", "The thermocouple that measures the sample temperature.")
-        tdt["col: text"].insert("insert", "Reference column for corresponding variable in raw data file.")
+        tdt["SampT [\u00B0C]: text"].insert("insert", "The thermocouple that measures the sample temperature.")
+        tdt["col: text"].insert("insert", "Reference column for corresponding quantity in raw data file.")
         tdt["m: text"].insert("insert", "Every entry in the column of data is converted according to m*x + b, " +
                                         "where x is the entry in the column. Use this to convert the column's data " +
                                         "to SI units.")
         tdt["b: text"].insert("insert", "See entry for 'm' above.")
-        tdt["cerr: text"].insert("insert", "Constant uncertainty of the instrument, e.g., +/- 2\u2103. " +
+        tdt["cerr: text"].insert("insert", "Constant uncertainty of the instrument, e.g., +/- 2\u00B0C. " +
                                            "When calculating the uncertainty caused by each instrument, the " +
                                            "application chooses the largest out of the constant uncertainty, the " +
                                            "proportional uncertainty (see below), and the calculated statistical " +
                                            "uncertainty.")
         tdt["perr: text"].insert("insert", "Proportional uncertainty of the instrument, e.g., " +
-                                           "+/- 0.75% of the measurement (in \u2103).")
+                                           "+/- 0.75% of the measurement (in \u00B0C).")
 
         # Configure each text widget
         for i, symbol in enumerate(td):

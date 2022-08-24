@@ -74,10 +74,10 @@ meaning at least one data file has the sample measured at multiple pressures.
 
 Clicking the “Equilibrium Variables” button immediately beneath the top-right plot allows the user to edit the 
 tolerance for determining equilibrium, the delay until equilibrium, the number of points used to find the equilibrium, 
-and the number of data points used to find initial and equilibrium variables. The tolerance is the value at which the 
+and the number of data points used to find initial and equilibrium values. The tolerance is the value at which the 
 second derivative of the pressure with respect to time (∂^2 P/∂t^2) is approximated to be zero. The delay until 
 equilibrium is the minimum number of seconds to wait after the isolation valve is opened until initiating analysis to 
-detect equilibrium. The initial variable range is the number of data points prior to opening the isolation valve used to 
+detect equilibrium. The initial values range is the number of data points prior to opening the isolation valve used to 
 determine the initial values. The equilibrium range is the number of data points used to determine final values and when 
 the absorption rate has reached an equilibrium. 
 

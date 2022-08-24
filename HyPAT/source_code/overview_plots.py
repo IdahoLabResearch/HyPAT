@@ -516,7 +516,7 @@ class Plots(tk.Frame):
             self.ax[i].set_xlim(self.xmin, self.max)
 
             # top axis
-            self.axC[i].set_xlabel("Temperature, T (\u2103)")
+            self.axC[i].set_xlabel("Temperature, T (\u00B0C)")
             self.axC[i].set_xlim(self.xmin, self.max)
 
             # redo the top ticks so that they line up with proper positions for Celsius
@@ -1007,7 +1007,7 @@ class EditMaterials(tk.Toplevel):
                                             self.K0.get(), self.E_K.get(), self.tmin_s.get(), self.tmax_s.get()]
 
                 # overwrite the old source file with the updated dataframe
-                material_filename = os.path.join('datafiles', 'material_data.xlsx')
+                material_filename = os.path.join('data_files', 'material_data.xlsx')
                 self.storage.material_data.to_excel(material_filename)
                 # This next bit is needed because to_excel formats named indexes poorly
                 import openpyxl
@@ -1020,7 +1020,7 @@ class EditMaterials(tk.Toplevel):
                 # the melting temperatures source file, then update that source file.
                 if not np.isnan(self.tmelt.get()):
                     self.storage.melting_tempK.loc[self.material.get()] = [self.tmelt.get()]
-                    self.storage.melting_tempK.to_excel(os.path.join('datafiles', 'melting_tempK.xlsx'))
+                    self.storage.melting_tempK.to_excel(os.path.join('data_files', 'melting_tempK.xlsx'))
 
                 self.changed = True
                 self.destroy()
@@ -1055,7 +1055,7 @@ class EditMaterials(tk.Toplevel):
                     self.storage.material_data.drop(index=self.material.get(), inplace=True)
 
                     # overwrite the old source file with the updated dataframe
-                    material_filename = os.path.join('datafiles', 'material_data.xlsx')
+                    material_filename = os.path.join('data_files', 'material_data.xlsx')
                     self.storage.material_data.to_excel(material_filename)
                     # This next bit is needed because to_excel formats named indexes poorly
                     import openpyxl
@@ -1068,7 +1068,7 @@ class EditMaterials(tk.Toplevel):
                     # updating the melting temperatures source file, then update that source file.
                     if self.material.get() in self.storage.melting_tempK.index:
                         self.storage.melting_tempK.drop(index=self.material.get(), inplace=True)
-                        self.storage.melting_tempK.to_excel(os.path.join('datafiles', 'melting_tempK.xlsx'))
+                        self.storage.melting_tempK.to_excel(os.path.join('data_files', 'melting_tempK.xlsx'))
 
                 self.changed = True
                 self.destroy()  # Closes Add/Edit Materials window

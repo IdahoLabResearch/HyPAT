@@ -205,7 +205,7 @@ class InputForm(tk.Frame):
         box1 = tk.LabelFrame(parent, text="TEMPERATURE INPUT", fg="blue")
         self.add_entry2(self, box1, self.input, key="temp", text="Temperature: T", innersubscript="C",
                         innertext=", T", subscript="K",
-                        units=("[\u2103]", "[K]"), tvar1=self.storage.Tc, tvar2=self.storage.Tk, row=0,
+                        units=("[\u00B0C]", "[K]"), tvar1=self.storage.Tc, tvar2=self.storage.Tk, row=0,
                         conversion=lambda tvar1, variable, key: self.storage.update_temperature(tvar1, variable, key))
         self.add_text(box1, text="Reciprocal temperature: 1/T", subscript="K",
                       units="[1/K]", tvar=self.storage.invTk, row=1)
@@ -503,7 +503,7 @@ class ORingsAndDefaultVals(tk.Toplevel):
                     [self.D_ring.get(), self.d_ring.get(), self.x_ring.get()]
 
                 # overwrite the old source file with the updated dataframe
-                oring_filename = os.path.join('datafiles', 'o-ring_data.xlsx')
+                oring_filename = os.path.join('data_files', 'o-ring_data.xlsx')
                 self.storage.oring_info_4file.to_excel(oring_filename)
 
                 self.orings_changed = True
@@ -536,7 +536,7 @@ class ORingsAndDefaultVals(tk.Toplevel):
                 if self.ring.get() in self.storage.oring_info_4file.index:  # Check that the O-ring's in this dataframe
                     self.storage.oring_info_4file.drop(index=self.ring.get(), inplace=True)
                     # overwrite the old source file with the updated dataframe
-                    oring_filename = os.path.join('datafiles', 'o-ring_data.xlsx')
+                    oring_filename = os.path.join('data_files', 'o-ring_data.xlsx')
                     self.storage.oring_info_4file.to_excel(oring_filename)
 
                 self.orings_changed = True
@@ -579,7 +579,7 @@ class ORingsAndDefaultVals(tk.Toplevel):
                 self.storage.defaults_info.loc[0, "Secondary Side Volume [cc]"] = self.sV.get()
 
                 # overwrite the old source file with the updated dataframe
-                default_entry_vars_filename = os.path.join('datafiles', 'default_entry_vals.xlsx')
+                default_entry_vars_filename = os.path.join('data_files', 'default_entry_vals.xlsx')
                 self.storage.defaults_info.to_excel(default_entry_vars_filename, index=False)
 
                 self.defaults_changed = True
