@@ -642,7 +642,7 @@ class AbsorptionPlots(tk.Frame):
         self.b0.config(text='Choose new folder')
 
     def update_dataframe(self):
-        """ Update the dataframe that is used for filling the Excel sheet and plotting the data in overview plots """
+        """ Update the dataframe that is used for filling the Excel sheet and plotting the data in overview plots """ # . will loading data in the other tab overwrite this and casue problems?
         # this will recreate the dataframe each time
         df = pd.DataFrame()
         for filename in self.options:
@@ -659,6 +659,8 @@ class AbsorptionPlots(tk.Frame):
                  "Diffusivity Uncertainty [m^2 s^-1]": self.D_err[filename],
                  "Solubility [mol m^-3 Pa^-0.5]": self.Ks[filename],
                  "Solubility Uncertainty [mol m^-3 Pa^-0.5]": self.Ks_err[filename],
+                 "Sample Composition [H/M]": self.HM[filename],
+                 "Sample Composition Uncertainty [H/M]": self.HM_err[filename]
                  }, index=[filename]
             ))
         self.storage.TransportParameters = df
@@ -1016,7 +1018,7 @@ class AbsorptionPlots(tk.Frame):
         # determine row number when equilibrium pressure is achieved, checking to ensure it is before the end of
         # the file and after the minimum time delay + t0
         dPres = data['dPres'].rolling(window=self.e_range[filename], center=True, min_periods=1).mean()
-        # List of all terms in dPres which are less than -1e-3 (allowing for a slight decline during equilibrium)
+        # List of all terms in dPres which are less than -5e-3 (allowing for a slight decline during equilibrium)
         neg_dPres = np.where(dPres < -5E-3)[0]
         # Minimum terms in a row required to determine if the pressure drop off was reached
         min_seq = max(self.e_range[filename] // 2 - 1, 1)
@@ -1031,7 +1033,7 @@ class AbsorptionPlots(tk.Frame):
         past_drop = False
         #  Find where the pressure drops off because the valve was opened or fail to find such a point
         for count, value in enumerate(neg_dPres[:len(neg_dPres) - min_seq]):
-            if e_time_max > value > (self.t0[filename]):  # if the value is after we can start looking for equilibrium,
+            if e_time_max > value > (self.t0[filename]):  # if the value is in the range for looking for equilibrium,
                 # ...check to see if we are past the initial drop in pressure
                 if np.diff(neg_dPres[count:count + 2]) > 2 and not past_drop:
                     past_drop = True
@@ -1056,7 +1058,8 @@ class AbsorptionPlots(tk.Frame):
                                 str(round(data.loc[e_del + self.t0[filename], 't'] -
                                           data.loc[self.t0[filename], 't'], 3)) + " s.\n\n"
         if e_del > e_time_max - (self.e_range[filename] + self.t0[filename] + 2):
-            # In case e_del produces a usable data point but that data point is past an abrupt downturn in pressure
+            # In case e_del produces a usable data point but that data point is past an abrupt downturn in pressure or
+            # is past the valve closing,
             e_del = e_time_max - (self.e_range[filename] + self.t0[filename] + 2)
             self.error_texts += "Equilibrium Warning with file " + filename + ". The user-input time delay" + \
                                 " exceeded the limit of " + \
@@ -1170,7 +1173,7 @@ class AbsorptionPlots(tk.Frame):
         # Data for pressure vs composition graph
         NA = self.storage.Na  # number of atoms per mole, the Avogadro constant
         a_num = self.ms_g.get() * NA / self.molar_mass.get()  # number of atoms of metal
-        H_num = self.ns_e[filename] * NA  # Number of Hydrogen atoms in the sample
+        H_num = 2 * self.ns_e[filename] * NA  # Number of Hydrogen atoms in the sample
         self.HM[filename] = H_num / a_num  # Hydrogen to metal atoms ratio
         self.HM_err[filename] = abs(self.HM[filename]) * np.sqrt((self.ms_g_err.get()/self.ms_g.get()) ** 2 +
                                                                  (nse_err / self.ns_e[filename]) ** 2)

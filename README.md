@@ -170,7 +170,7 @@ Thomas Fuerst
 Chase Taylor 
 
 Joey Watkins (https://github.com/joeymwatkins) built most of the original functionality. George Evans 
-(https://github.com/GeorgeEvans0) added the "Absorption Plots" tab, cleaned up errors, made various visual fixes, and 
+(https://github.com/GeorgeEvans0) added the "Absorption Plots" tab, cleaned up errors, made visual fixes, and 
 added functionality. Thomas Fuerst (https://github.com/FuerstT) was the primary supervisor over this project, with Chase 
 Taylor (https://github.com/taylchas) as secondary supervisor.
 
