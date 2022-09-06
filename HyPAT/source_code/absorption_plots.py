@@ -1202,7 +1202,7 @@ class AbsorptionPlots(tk.Frame):
         halfway_point = np.argmin(abs(self.ns_t[filename] / self.ns_e[filename] - 0.5))
         halfway_t = self.D_time[filename][halfway_point + self.t0[filename]]  # +t0 because of indexing
         prop_const = -np.log(np.pi ** 2 / 16 - (1 / 9)*(np.pi ** 2 / 16) ** 9) / np.pi ** 2  # Proportionality constant
-        D = prop_const * sl ** 2 / halfway_t  # Diffusivity
+        D = prop_const * sl ** 2 / halfway_t  # Diffusivity  # todo maybe calculate error in this
         self.rhs[filename] = 1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) * np.exp(
             -D * (2 * n + 1) ** 2 * np.pi ** 2 * (self.D_time[filename]) /
             (4 * (sl / 2) ** 2)) for n in range(0, 20)])
