@@ -135,6 +135,7 @@ class AbsorptionPlots(tk.Frame):
         self.D_err = {}
         self.D_time = {}  # time over which D is calculated
         self.lhs = {}  # for the diffusivity optimization comparison
+        self.rhs = {}  # analytical solution (non-fit)
         self.rhs_cf = {}  # curve_fit
 
         # solubility variables
@@ -1190,13 +1191,21 @@ class AbsorptionPlots(tk.Frame):
         """ Calculate Diffusivity using loaded data """
         debug = False
 
-        # Prepare for fit
+        # Prepare for analysis
         sl = self.sample_thickness.get() * 0.001  # converted to meters
         sl_err = self.sample_thickness_err.get() * 0.001  # converted to meters  # todo Find a way to use this
-        D = 1.0e-9  # todo Find an algorithmic way to get a good initial diffusivity guess
         self.D_time[filename] = data.loc[self.t0[filename] + 1:self.t_e[filename] + self.e_range[filename], 't'] - \
                                 data.loc[self.t0[filename] + 1, 't']
         h = data.loc[1, 't'] - data.loc[0, 't']
+
+        # Calculate D without fitting for an initial guess. Source: Crank, pg238-239
+        halfway_point = np.argmin(abs(self.ns_t[filename] / self.ns_e[filename] - 0.5))
+        halfway_t = self.D_time[filename][halfway_point + self.t0[filename]]  # +t0 because of indexing
+        prop_const = -np.log(np.pi ** 2 / 16 - (1 / 9)*(np.pi ** 2 / 16) ** 9) / np.pi ** 2  # Proportionality constant
+        D = prop_const * sl ** 2 / halfway_t  # Diffusivity
+        self.rhs[filename] = 1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) * np.exp(
+            -D * (2 * n + 1) ** 2 * np.pi ** 2 * (self.D_time[filename]) /
+            (4 * (sl / 2) ** 2)) for n in range(0, 20)])
 
         # Function for optimizing D using curve fit
         def f(xdata, D_opt, dt_opt, A_opt):
@@ -1207,7 +1216,6 @@ class AbsorptionPlots(tk.Frame):
 
         # Attempt to optimize D using curve fit and the above function. Show a warning if it fails
         self.lhs[filename] = self.ns_t[filename] / self.ns_e[filename]  # assumes ns0 in sample is zero
-
         try:
             popt, pcov = curve_fit(f, self.D_time[filename], self.lhs[filename], p0=[D, 0, 1], xtol=D*1e-3,
                                    bounds=([0, 0, -1000], [10, 10*h, 1000]))
@@ -1472,6 +1480,7 @@ class AbsorptionPlots(tk.Frame):
         """ Creates the diffusivity optimization comparison (bottom right) plot """
         # Diffusivity comparison plots for optimization
         ax3.plot(self.D_time[filename][1:], self.lhs[filename][1:], '.', label='Experimental Data', )
+        ax3.plot(self.D_time[filename][1:], self.rhs[filename][1:], label='D: Sorption')
         ax3.plot(self.D_time[filename][1:], self.rhs_cf[filename][1:], '--', label='Optimized Fit')
         ax3.set_title(self.ax3_title)
         # Set up axes

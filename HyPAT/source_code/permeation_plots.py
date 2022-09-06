@@ -136,7 +136,7 @@ class PermeationPlots(tk.Frame):
         self.D_err = {}
         self.D_time = {}  # time over which D is calculated
         self.lhs = {}  # for the diffusivity optimization comparison
-        self.rhs = {}
+        self.rhs = {}  # time-lag method
         self.rhs_cf = {}  # curve_fit
 
         # solubility variables
