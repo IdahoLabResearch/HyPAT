@@ -414,9 +414,10 @@ class Plots(tk.Frame):
         self.fig = Figure()
         self.ax = [self.fig.add_subplot(1, 3, i) for i in range(1, 4)]
         # The below line helps keep the graphs looking nice when the window gets made small. Note that tight_layout is
-        # an experimental feature as of 10/16/2021 and may be changed unpredictably.
-        # todo Update this to the official layout feature. See:
-        #      https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html
+        #   an experimental feature as of 10/16/2021 and may be changed unpredictably.
+        # As of 9/6/22, according to https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html there
+        #   was an update. This source says set_tight_layout is still fine:
+        #   https://matplotlib.org/stable/api/figure_api.html
         self.fig.set_tight_layout("True")
 
         # Format axes

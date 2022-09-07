@@ -257,7 +257,7 @@ class AbsorptionPlots(tk.Frame):
         tk.Label(self.npframe, text="  ").grid(row=0, column=2, sticky='w')  # Give the label some right-side padding
         self.npframe.columnconfigure(0, weight=1)
 
-        button_row = 7
+        button_row = 6
         ttk.Style(self).configure('Tight.TButton', width="")  # Remove the extra space from the button
 
         self.b0 = ttk.Button(self.frame, text='Choose folder', command=self.select_file)
@@ -268,6 +268,9 @@ class AbsorptionPlots(tk.Frame):
         button_row += 1
         settings_b = ttk.Button(self.frame, text='Settings', command=self.adjust_persistent_vars, style="Tight.TButton")
         settings_b.grid(row=button_row, column=sidecol, sticky="w")
+        button_row += 1
+        self.coord_b = ttk.Button(self.frame, text="Enable Coordinates", command=self.toggle_coordinates)
+        self.coord_b.grid(row=button_row, column=sidecol, sticky="w")
         button_row += 1
         b2 = ttk.Button(self.frame, text='Close popout plots', command=lambda: plt.close('all'))
         b2.grid(row=button_row, column=sidecol, sticky="w")
@@ -310,8 +313,8 @@ class AbsorptionPlots(tk.Frame):
         # The top right plot would flicker every time the order of magnitude of the cursor's location would change, so
         # the following line changes the format of the displayed x & y coordinates. The specific format chosen was the
         # result of trial and error in conjunction with editing the text of the entry boxes for e_tol and e_t_del
-        # (which are now accessed by a button)
-        self.ax12.format_coord = lambda x, y: "({:3g}, ".format(y) + "{:3g})".format(x)
+        # (which are now accessed by a button). This is kept in case coordinates are changed to on by default again.
+        self.ax12.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
 
         # Create bottom middle plot
         self.ax2_title = "Pressure-Composition-Temperature"
@@ -333,9 +336,37 @@ class AbsorptionPlots(tk.Frame):
                                                                          title=self.ax3_title,
                                                                          row=0, column=2, axes=[.15, .15, .75, .75])
 
-        # Counteracts a bug of constrained_layout=True which causes four plots to be generated but not shown until a
+        # Turn off coordinates to avoid layout="constrained" causing the plots to shift constantly
+        self.ax.format_coord = lambda x, y: ''
+        self.ax1.format_coord = lambda x, y: ''
+        self.ax12.format_coord = lambda x, y: ''
+        self.ax2.format_coord = lambda x, y: ''
+        self.ax3.format_coord = lambda x, y: ''
+
+        # Counteracts a bug of layout="constrained" which causes four plots to be generated but not shown until a
         # Popout Plot button is clicked:
         plt.close("all")
+
+    def toggle_coordinates(self):
+        """ Toggles between being able to see coordinates while hovering over plots """
+        if self.coord_b.config('text')[-1] == 'Enable Coordinates':
+            # Turn on coordinates
+            self.ax.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.ax1.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.ax12.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.ax2.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.ax3.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.coord_b.config(text='Disable Coordinates')  # Toggle the text so next time, it goes to the "else" part
+        else:
+            # Turn off coordinates
+            self.ax.format_coord = lambda x, y: ''
+            self.ax1.format_coord = lambda x, y: ''
+            self.ax12.format_coord = lambda x, y: ''
+            self.ax2.format_coord = lambda x, y: ''
+            self.ax3.format_coord = lambda x, y: ''
+            self.coord_b.config(text='Enable Coordinates')  # Toggle the text so next time, it goes to the "if" part
+        self.canvas.draw()
+        self.toolbar.update()
 
     def update_function(self, tvar, var_type, key):
         """ Checks if the user entry is a number (float or int). If not, revert the entered string to its prior state.
@@ -365,7 +396,7 @@ class AbsorptionPlots(tk.Frame):
 
     def add_plot(self, parent, xlabel='', ylabel='', title='', row=0, column=0, rowspan=1, axes=[.1, .15, .8, .75]):
         """ Create a plot according to variables passed in (parent frame, x-label, y-label, title, row, and column).
-            axes are kept in case constrained_layout has problems. """
+            axes are kept in case layout="constrained" has problems. """
         # location of main plot
         frame = tk.Frame(parent)
         frame.grid(row=row, column=column, rowspan=rowspan, sticky="nsew")
@@ -374,11 +405,11 @@ class AbsorptionPlots(tk.Frame):
         The above website says the following as of 10/16/2021: 
         "Currently Constrained Layout is experimental. The behaviour and API are subject to change, 
         or the whole functionality may be removed without a deprecation period..."
+        As of 9/6/22, according to https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html there
+        was an update. This source says to use layout="constrained": https://matplotlib.org/stable/api/figure_api.html
         """
-        # todo Update this to the official layout feature. See:
-        #      https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html
-        fig, ax = matplotlib.pyplot.subplots(constrained_layout=True)
-        # If something goes wrong with constrained_layout, comment out the above line and uncomment the two lines below
+        fig, ax = matplotlib.pyplot.subplots(layout="constrained")
+        # If something's wrong with layout="constrained", comment out the above line and uncomment the two lines below
         # fig = Figure()
         # ax = fig.add_axes(axes)  # [left, bottom, width, height]
 
