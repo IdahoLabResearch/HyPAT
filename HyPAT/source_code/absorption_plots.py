@@ -289,6 +289,9 @@ class AbsorptionPlots(tk.Frame):
         self.frame.columnconfigure((0, 2, 4, 5), weight=1)
         # self.frame.columnconfigure(tuple(range(6)), weight=1)  # option for squishing all columns instead
 
+        # Store the "set_message" functions
+        self.message_function = {}
+
         # create bottom left plot
         self.ax_title = "Solubility vs Temperature"
         self.ax_xlabel = "Temperature (\u00B0C)"
@@ -356,6 +359,11 @@ class AbsorptionPlots(tk.Frame):
             self.ax12.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
             self.ax2.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
             self.ax3.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            # Turn on status bar
+            self.toolbar.set_message = self.message_function[self.ax]
+            self.toolbar1.set_message = self.message_function[self.ax1]
+            self.toolbar2.set_message = self.message_function[self.ax2]
+            self.toolbar3.set_message = self.message_function[self.ax3]
             self.coord_b.config(text='Disable Coordinates')  # Toggle the text so next time, it goes to the "else" part
         else:
             # Turn off coordinates
@@ -364,6 +372,15 @@ class AbsorptionPlots(tk.Frame):
             self.ax12.format_coord = lambda x, y: ''
             self.ax2.format_coord = lambda x, y: ''
             self.ax3.format_coord = lambda x, y: ''
+            # Turn off status bar
+            self.toolbar.set_message("")
+            self.toolbar1.set_message("")
+            self.toolbar2.set_message("")
+            self.toolbar3.set_message("")
+            self.toolbar.set_message = lambda s: ""
+            self.toolbar1.set_message = lambda s: ""
+            self.toolbar2.set_message = lambda s: ""
+            self.toolbar3.set_message = lambda s: ""
             self.coord_b.config(text='Enable Coordinates')  # Toggle the text so next time, it goes to the "if" part
         self.canvas.draw()
         self.toolbar.update()
@@ -433,6 +450,10 @@ class AbsorptionPlots(tk.Frame):
             b = tk.Button(entry_frame, text='Equilibrium Variables', command=self.adjust_e_vars)
             b.grid(row=0, column=4, sticky="w")
 
+        # Store and turn off the capability to update the status bar
+        self.message_function[ax] = toolbar.set_message
+        toolbar.set_message = lambda s: ""
+
         toolbar.update()
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
@@ -484,7 +505,7 @@ class AbsorptionPlots(tk.Frame):
                 self.get_persistent_vars()  # Loads variables from a data file for use in analysis
             except Exception as e:  # If there is a problem while trying to load the persistent variables
                 # If you want to see the traceback as part of the error text, change the below value to true
-                want_traceback = False
+                want_traceback = True
                 if want_traceback:
                     import traceback
                     full_traceback = "\n" + traceback.format_exc()
@@ -580,7 +601,7 @@ class AbsorptionPlots(tk.Frame):
                                 self.calculate_permeability(filename + pname, self.datafiles[filename + pname])
                         except Exception as e:
                             # If you want to see the traceback as part of the error text, change the below value to true
-                            want_traceback = False
+                            want_traceback = True
                             if want_traceback:
                                 import traceback
                                 full_traceback = "\n" + traceback.format_exc()
@@ -1019,13 +1040,14 @@ class AbsorptionPlots(tk.Frame):
 
     def calculate_solubility(self, filename, data):
         """ Calculate Solubility using loaded data """
+        print("@@@@@@@@@@@@@" + filename + "@@@@@@@@@@@@@")
         R = self.storage.R * 1000  # J/mol K
         Vs = self.Vs_cm3.get() * 10 ** (-6)  # m^3
         Vs_err = self.Vs_cm3_err.get() * 10 ** (-6)  # m^3
         V_ic = self.Vic_cm3.get() * 10 ** (-6)  # m^3
         V_ic_err = self.Vic_cm3_err.get() * 10 ** (-6)  # m^3
         V_sc = self.Vsc_cm3.get() * 10 ** (-6) - Vs  # m^3 Note the correction for the sample's volume
-        V_sc_err = self.Vsc_cm3_err.get() * 10 ** (-6)  # m^3
+        V_sc_err = self.Vsc_cm3_err.get() * 10 ** (-6)  # m^3  # . todo add error from sample volume
         V_totc = V_ic + V_sc  # m^3, total container
         V_totc_err = np.sqrt(V_ic_err ** 2 + V_sc_err ** 2)  # m^3
 
@@ -1151,6 +1173,8 @@ class AbsorptionPlots(tk.Frame):
         # calculate moles
         nc0 = self.pr0_avg[filename] * V_ic / R / self.Tg0[filename]
         nc_e = self.pr_e_avg[filename] * V_totc / R / self.Tg_e[filename]
+
+        print("nc_e", nc_e, "nc0", nc0)  # . todo delete
         self.ns_e[filename] = nc0 - nc_e
 
         # Pressure as a function of time (Pa)
@@ -1192,10 +1216,13 @@ class AbsorptionPlots(tk.Frame):
                                      (Tg0_err / self.Tg0[filename]) ** 2)
         nce_err = abs(nc_e) * np.sqrt((Pres_e_err / self.pr_e_avg[filename]) ** 2 + (V_totc_err / V_totc) ** 2 +
                                       (Tge_err / self.Tg_e[filename]) ** 2)
+        print(Pres_e_err, self.pr_e_avg[filename],V_totc_err,V_totc,Tge_err, self.Tg_e[filename], (Pres_e_err / self.pr_e_avg[filename]) ** 2, (V_totc_err / V_totc) ** 2, (Tge_err / self.Tg_e[filename]) ** 2)
         nse_err = np.sqrt(nc0_err ** 2 + nce_err ** 2)
+        print("nc0 and nce", nc0_err, nce_err,nc0_err ** 2, nce_err ** 2)  # . todo delete UP NEXT IS FIGURING OUT WHY SOLUBILITY IS WEIRD
 
         self.Ks_err[filename] = abs(self.Ks[filename]) * np.sqrt(
             (nse_err / self.ns_e[filename]) ** 2 + (Vs_err / Vs) ** 2 + (Pres_e_err / 2 / self.pr_e_avg[filename]) ** 2)
+        print(nse_err, self.ns_e[filename],Vs_err,Vs,Pres_e_err,self.pr_e_avg[filename], (nse_err / self.ns_e[filename]) ** 2, (Vs_err / Vs) ** 2, (Pres_e_err / 2 / self.pr_e_avg[filename]) ** 2)  #  . todo delete
 
         # store uncertainties
         self.ns_e_err[filename] = nse_err
@@ -1229,10 +1256,22 @@ class AbsorptionPlots(tk.Frame):
                                 data.loc[self.t0[filename] + 1, 't']
         h = data.loc[1, 't'] - data.loc[0, 't']
 
+        # Prepare data for fitting
+        if self.exp_type.get() == "Isotherm" and filename[-1] != "1":
+            pressure_number = str(int(filename[-1]) - 1)
+            last_filename = filename[:-1] + pressure_number
+            print("pn:", pressure_number, "lf:", last_filename)  # . todo delete print statements
+            ns0 = self.ns_e[last_filename]
+            print("ns0:",ns0)
+        else:
+            ns0 = 0
+        self.lhs[filename] = (self.ns_t[filename] - ns0) / (self.ns_e[filename] - ns0)  # . todo add error and edit title plot
+
         # Calculate D without fitting for an initial guess. Source: Crank, pg238-239
-        halfway_point = np.argmin(abs(self.ns_t[filename] / self.ns_e[filename] - 0.5))
-        halfway_t = self.D_time[filename][halfway_point + self.t0[filename]]  # +t0 because of indexing
+        halfway_point = max(1, int(np.argmin(abs(self.ns_t[filename] / self.ns_e[filename] - 0.5))))  # . todo maybe add a warning if uses 1?
+        halfway_t = self.D_time[filename][halfway_point + self.t0[filename] + 1]  # +t0+1 because of indexing
         prop_const = -np.log(np.pi ** 2 / 16 - (1 / 9)*(np.pi ** 2 / 16) ** 9) / np.pi ** 2  # Proportionality constant
+        print("t1/2:", halfway_t, " 1/2:", halfway_point, " Cp:", prop_const)
         D = prop_const * sl ** 2 / halfway_t  # Diffusivity  # todo maybe calculate error in this
         self.rhs[filename] = 1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) * np.exp(
             -D * (2 * n + 1) ** 2 * np.pi ** 2 * (self.D_time[filename]) /
@@ -1246,7 +1285,6 @@ class AbsorptionPlots(tk.Frame):
             return rhs / A_opt
 
         # Attempt to optimize D using curve fit and the above function. Show a warning if it fails
-        self.lhs[filename] = self.ns_t[filename] / self.ns_e[filename]  # assumes ns0 in sample is zero
         try:
             popt, pcov = curve_fit(f, self.D_time[filename], self.lhs[filename], p0=[D, 0, 1], xtol=D*1e-3,
                                    bounds=([0, 0, -1000], [10, 10*h, 1000]))
@@ -1511,8 +1549,8 @@ class AbsorptionPlots(tk.Frame):
         """ Creates the diffusivity optimization comparison (bottom right) plot """
         # Diffusivity comparison plots for optimization
         ax3.plot(self.D_time[filename][1:], self.lhs[filename][1:], '.', label='Experimental Data', )
-        ax3.plot(self.D_time[filename][1:], self.rhs[filename][1:], label='D: Sorption')
-        ax3.plot(self.D_time[filename][1:], self.rhs_cf[filename][1:], '--', label='Optimized Fit')
+        ax3.plot(self.D_time[filename][1:], self.rhs[filename][1:], '--', label='D: Initial Guess')
+        ax3.plot(self.D_time[filename][1:], self.rhs_cf[filename][1:], '--', label='D: Optimized Fit')
         ax3.set_title(self.ax3_title)
         # Set up axes
         ax3.set_xlabel(self.ax3_xlabel)
