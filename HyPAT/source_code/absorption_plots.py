@@ -85,11 +85,11 @@ class AbsorptionPlots(tk.Frame):
         self.sample_thickness = tk.DoubleVar(value=0.1)
         self.sample_thickness_err = tk.DoubleVar(value=round(self.sample_thickness.get()*0.05, 13))
         self.Vs_cm3 = tk.DoubleVar(value=2.9e-2)   # Volume of initial container
-        self.Vs_cm3_err = tk.DoubleVar(value=round(self.Vs_cm3.get() * 0.05, 13))
+        self.Vs_cm3_err = tk.DoubleVar(value=round(self.Vs_cm3.get() * 0.005, 13))
         self.Vic_cm3 = tk.DoubleVar(value=379.0)  # Volume of initial container
-        self.Vic_cm3_err = tk.DoubleVar(value=round(self.Vic_cm3.get() * 0.05, 13))
+        self.Vic_cm3_err = tk.DoubleVar(value=2.3)  # round(self.Vic_cm3.get() * 0.005, 13))
         self.Vsc_cm3 = tk.DoubleVar(value=66.4)  # cm^3 Volume of sample container
-        self.Vsc_cm3_err = tk.DoubleVar(value=round(self.Vsc_cm3.get() * 0.05, 13))
+        self.Vsc_cm3_err = tk.DoubleVar(value=0.6)  #round(self.Vsc_cm3.get() * 0.005, 13))
         self.ms_g = tk.DoubleVar(value=1)  # g Mass of sample
         self.ms_g_err = tk.DoubleVar(value=round(self.ms_g.get() * 0.05, 13))
         # todo Uncomment self.rhos_gcm3 and self.rho_gcm3_err here and elsewhere, then connect them to the code so they
@@ -1040,14 +1040,13 @@ class AbsorptionPlots(tk.Frame):
 
     def calculate_solubility(self, filename, data):
         """ Calculate Solubility using loaded data """
-        print("@@@@@@@@@@@@@" + filename + "@@@@@@@@@@@@@")
         R = self.storage.R * 1000  # J/mol K
         Vs = self.Vs_cm3.get() * 10 ** (-6)  # m^3
         Vs_err = self.Vs_cm3_err.get() * 10 ** (-6)  # m^3
         V_ic = self.Vic_cm3.get() * 10 ** (-6)  # m^3
         V_ic_err = self.Vic_cm3_err.get() * 10 ** (-6)  # m^3
         V_sc = self.Vsc_cm3.get() * 10 ** (-6) - Vs  # m^3 Note the correction for the sample's volume
-        V_sc_err = self.Vsc_cm3_err.get() * 10 ** (-6)  # m^3  # . todo add error from sample volume
+        V_sc_err = np.sqrt((self.Vsc_cm3_err.get() * 10 ** (-6)) ** 2 + Vs_err ** 2)  # m^3
         V_totc = V_ic + V_sc  # m^3, total container
         V_totc_err = np.sqrt(V_ic_err ** 2 + V_sc_err ** 2)  # m^3
 
@@ -1173,8 +1172,6 @@ class AbsorptionPlots(tk.Frame):
         # calculate moles
         nc0 = self.pr0_avg[filename] * V_ic / R / self.Tg0[filename]
         nc_e = self.pr_e_avg[filename] * V_totc / R / self.Tg_e[filename]
-
-        print("nc_e", nc_e, "nc0", nc0)  # . todo delete
         self.ns_e[filename] = nc0 - nc_e
 
         # Pressure as a function of time (Pa)
@@ -1211,20 +1208,17 @@ class AbsorptionPlots(tk.Frame):
                         self.Pres_cerr["Pres"], self.pr0_avg[filename] * self.Pres_perr["Pres"] / 100)
         Pres_e_err = max(data.loc[self.t_e[filename] + 1:self.t_e[filename] + self.e_range[filename], 'Pres'].std(),
                          self.Pres_cerr["Pres"], self.pr_e_avg[filename] * self.Pres_perr["Pres"] / 100)
-
+        # Moles uncertainties
         nc0_err = abs(nc0) * np.sqrt((Pres0_err / self.pr0_avg[filename]) ** 2 + (V_ic_err / V_ic) ** 2 +
                                      (Tg0_err / self.Tg0[filename]) ** 2)
         nce_err = abs(nc_e) * np.sqrt((Pres_e_err / self.pr_e_avg[filename]) ** 2 + (V_totc_err / V_totc) ** 2 +
                                       (Tge_err / self.Tg_e[filename]) ** 2)
-        print(Pres_e_err, self.pr_e_avg[filename],V_totc_err,V_totc,Tge_err, self.Tg_e[filename], (Pres_e_err / self.pr_e_avg[filename]) ** 2, (V_totc_err / V_totc) ** 2, (Tge_err / self.Tg_e[filename]) ** 2)
         nse_err = np.sqrt(nc0_err ** 2 + nce_err ** 2)
-        print("nc0 and nce", nc0_err, nce_err,nc0_err ** 2, nce_err ** 2)  # . todo delete UP NEXT IS FIGURING OUT WHY SOLUBILITY IS WEIRD
-
+        # Solubility uncertainty
         self.Ks_err[filename] = abs(self.Ks[filename]) * np.sqrt(
             (nse_err / self.ns_e[filename]) ** 2 + (Vs_err / Vs) ** 2 + (Pres_e_err / 2 / self.pr_e_avg[filename]) ** 2)
-        print(nse_err, self.ns_e[filename],Vs_err,Vs,Pres_e_err,self.pr_e_avg[filename], (nse_err / self.ns_e[filename]) ** 2, (Vs_err / Vs) ** 2, (Pres_e_err / 2 / self.pr_e_avg[filename]) ** 2)  #  . todo delete
 
-        # store uncertainties
+        # Store uncertainties
         self.ns_e_err[filename] = nse_err
         self.Tg_e_err[filename] = Tge_err
         self.pr_e_err[filename] = Pres_e_err
@@ -1237,7 +1231,7 @@ class AbsorptionPlots(tk.Frame):
         self.HM_err[filename] = abs(self.HM[filename]) * np.sqrt((self.ms_g_err.get()/self.ms_g.get()) ** 2 +
                                                                  (nse_err / self.ns_e[filename]) ** 2)
 
-        # get temp from sample TC
+        # Get temp from sample TC
         self.Ts0[filename] = data.loc[self.t0[filename] - self.i_range[filename]:self.t0[filename] - 1, 'SampT'].mean() + \
             self.storage.standard_temp
         self.Ts_e[filename] = data.loc[self.t_e[filename] + 1:self.t_e[filename] + self.e_range[filename], 'SampT'].mean() + \
@@ -1260,9 +1254,7 @@ class AbsorptionPlots(tk.Frame):
         if self.exp_type.get() == "Isotherm" and filename[-1] != "1":
             pressure_number = str(int(filename[-1]) - 1)
             last_filename = filename[:-1] + pressure_number
-            print("pn:", pressure_number, "lf:", last_filename)  # . todo delete print statements
             ns0 = self.ns_e[last_filename]
-            print("ns0:",ns0)
         else:
             ns0 = 0
         self.lhs[filename] = (self.ns_t[filename] - ns0) / (self.ns_e[filename] - ns0)  # . todo add error and edit title plot
