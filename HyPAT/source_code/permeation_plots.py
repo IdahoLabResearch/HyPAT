@@ -223,6 +223,9 @@ class PermeationPlots(tk.Frame):
         b4 = ttk.Button(self.frame, text='Export to Excel', command=self.export_data)
         b4.grid(row=menu_row + 1, column=4, sticky="ew")
 
+        # Store the "set_message" functions
+        self.message_function = {}
+
         # create bottom left plot
         self.ax_title = "Permeability vs Temperature"
         self.ax_xlabel = "Temperature (\u00B0C)"
@@ -266,7 +269,7 @@ class PermeationPlots(tk.Frame):
         # Create bottom right plot
         self.ax3_title = "Diffusivity Optimization Comparison"
         self.ax3_xlabel = "Time (s)"
-        self.ax3_ylabel = r"(J$_t$ - J$_0$)/(J$_{inf}$ - J$_0$)"
+        self.ax3_ylabel = r"$(~J_{\mathrm{t}} - J_{\mathrm{0}}~)~/~(~J_{\mathrm{inf}} - J_{\mathrm{0}}~)$"
         self.fig3, self.ax3, self.canvas3, self.toolbar3 = self.add_plot(self.bottom_frame,
                                                                          xlabel=self.ax3_xlabel,
                                                                          ylabel=self.ax3_ylabel,
@@ -285,7 +288,7 @@ class PermeationPlots(tk.Frame):
         # Popout Plot button is clicked
         plt.close("all")
 
-    def toggle_coordinates(self):  # .
+    def toggle_coordinates(self): # .
         """ Toggles between being able to see coordinates while hovering over plots """
         if self.coord_b.config('text')[-1] == 'Enable Coordinates':
             # Turn on coordinates
@@ -295,6 +298,11 @@ class PermeationPlots(tk.Frame):
             self.ax2.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
             self.ax22.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
             self.ax3.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            # Turn on status bar
+            self.toolbar.set_message = self.message_function[self.ax]
+            self.toolbar1.set_message = self.message_function[self.ax1]
+            self.toolbar2.set_message = self.message_function[self.ax2]
+            self.toolbar3.set_message = self.message_function[self.ax3]
             self.coord_b.config(text='Disable Coordinates')  # Toggle the text so next time, it goes to the "else" part
         else:
             # Turn off coordinates
@@ -304,6 +312,15 @@ class PermeationPlots(tk.Frame):
             self.ax2.format_coord = lambda x, y: ''
             self.ax22.format_coord = lambda x, y: ''
             self.ax3.format_coord = lambda x, y: ''
+            # Turn off status bar
+            self.toolbar.set_message("")
+            self.toolbar1.set_message("")
+            self.toolbar2.set_message("")
+            self.toolbar3.set_message("")
+            self.toolbar.set_message = lambda s: ""
+            self.toolbar1.set_message = lambda s: ""
+            self.toolbar2.set_message = lambda s: ""
+            self.toolbar3.set_message = lambda s: ""
             self.coord_b.config(text='Enable Coordinates')  # Toggle the text so next time, it goes to the "if" part
         self.canvas.draw()
         self.toolbar.update()
@@ -373,6 +390,10 @@ class PermeationPlots(tk.Frame):
             entry_frame.pack(side="left", padx=1)
             b = tk.Button(entry_frame, text='Steady State Variables', command=self.adjust_ss_vars)
             b.grid(row=0, column=4, sticky="w")
+
+        # Store and turn off the capability to update the status bar
+        self.message_function[ax] = toolbar.set_message
+        toolbar.set_message = lambda s: ""
 
         toolbar.update()
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
