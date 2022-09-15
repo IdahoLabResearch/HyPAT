@@ -112,6 +112,8 @@ class Storage:
 
         # store the transport properties calculations
         self.TransportParameters = pd.DataFrame()
+        self.PTransportParameters = pd.DataFrame()
+        self.ATransportParameters = pd.DataFrame()
 
     def connect_variables(self):
         """ Set up variables so that functions are triggered if they are changed"""

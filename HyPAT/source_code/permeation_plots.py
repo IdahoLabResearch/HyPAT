@@ -623,6 +623,7 @@ class PermeationPlots(tk.Frame):
                  }, index=[filename]
                 )])
         self.storage.TransportParameters = df
+        self.storage.PTransportParameters = df
 
     def export_data(self):
         """ Loads dataframe containing the information for each material into an Excel sheet """
@@ -638,7 +639,7 @@ class PermeationPlots(tk.Frame):
             save_filename = asksaveasfilename(initialdir=os.path.dirname(__file__), initialfile="test",
                                               defaultextension="*.xlsx")
             if save_filename != '':
-                self.storage.TransportParameters.to_excel(save_filename)
+                self.storage.PTransportParameters.to_excel(save_filename)
 
         else:
             showerror(message='Please load data first.')
@@ -808,7 +809,7 @@ class PermeationPlots(tk.Frame):
                 # This is faster for large files, but isn't working on .xlsx file formats
                 Data = pd.read_csv(filename, sep='\t', header=None, usecols=self.needed_cols,
                                    converters=self.converters_dict, skiprows=self.starting_row,
-                                   skipfooter=self.footer_rows)
+                                   skipfooter=self.footer_rows, engine='python')
             else:  # assume .xlsx file
                 # openpyxl supports .xlsx Excel file formats. According to documentation, engine=None should
                 # support xlsx and xls, but it doesn't seem to work for xls as of 11/10/2021
@@ -858,7 +859,7 @@ class PermeationPlots(tk.Frame):
             if self.file_type == ".xls":
                 Data = pd.read_csv(filename, sep='\t', header=None, usecols=self.needed_cols,
                                    converters=self.converters_dict, skiprows=self.starting_row,
-                                   skipfooter=self.footer_rows)
+                                   skipfooter=self.footer_rows, engine='python')
             else:  # assume .xlsx file
                 Data = pd.read_excel(filename, header=None, engine="openpyxl", usecols=self.needed_cols,
                                      converters=self.converters_dict, skiprows=self.starting_row,
