@@ -699,7 +699,7 @@ class AbsorptionPlots(tk.Frame):
         # this will recreate the dataframe each time
         df = pd.DataFrame()
         for filename in self.options:
-            df = df.append(pd.DataFrame(
+            df = pd.concat([df, pd.DataFrame(
                 {"Gas Temperature [K]": self.Tg_e[filename],
                  "Gas Temperature Uncertainty [K]": self.Tg_e_err[filename],
                  "Sample Temperature [K]": self.Ts_e[filename],
@@ -715,7 +715,7 @@ class AbsorptionPlots(tk.Frame):
                  "Sample Composition [H/M]": self.HM[filename],
                  "Sample Composition Uncertainty [H/M]": self.HM_err[filename]
                  }, index=[filename]
-            ))
+                )])
         self.storage.TransportParameters = df
 
     def export_data(self):

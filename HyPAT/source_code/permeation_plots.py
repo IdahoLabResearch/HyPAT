@@ -605,7 +605,7 @@ class PermeationPlots(tk.Frame):
         # this will recreate the dataframe each time
         df = pd.DataFrame()
         for filename in self.options:
-            df = df.append(pd.DataFrame(
+            df = pd.concat([df, pd.DataFrame(
                 {"Gas Temperature [K]": self.Tgss[filename],
                  "Gas Temperature Uncertainty [K]": self.Tgss_err[filename],
                  "Sample Temperature [K]": self.Tsampss[filename],
@@ -621,7 +621,7 @@ class PermeationPlots(tk.Frame):
                  "Solubility [mol m^-3 Pa^-0.5]": self.Ks[filename],
                  "Solubility Uncertainty [mol m^-3 Pa^-0.5]": self.Ks_err[filename],
                  }, index=[filename]
-            ))
+                )])
         self.storage.TransportParameters = df
 
     def export_data(self):
