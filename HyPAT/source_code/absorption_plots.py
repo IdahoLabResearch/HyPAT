@@ -695,7 +695,7 @@ class AbsorptionPlots(tk.Frame):
         self.b0.config(text='Choose new folder')
 
     def update_dataframe(self):
-        """ Update the dataframe that is used for filling the Excel sheet and plotting the data in overview plots """ # . will loading data in the other tab overwrite this and casue problems?
+        """ Update the dataframe that is used for filling the Excel sheet and plotting the data in overview plots """
         # this will recreate the dataframe each time
         df = pd.DataFrame()
         for filename in self.options:
@@ -1263,14 +1263,13 @@ class AbsorptionPlots(tk.Frame):
         self.lhs[filename] = (self.ns_t[filename] - ns0) / (self.ns_e[filename] - ns0)
 
         # Calculate D without fitting for an initial guess. Source: Crank, pg238-239
-        halfway_point = max(1, int(np.argmin(abs(self.lhs[filename] - 0.5))))  # . todo maybe add a warning if uses 1?
+        halfway_point = max(1, int(np.argmin(abs(self.lhs[filename] - 0.5))))  # todo Maybe add a warning if uses 1?
         halfway_t = self.D_time[filename][halfway_point + self.t0[filename] + 1]  # +t0+1 because of indexing
         prop_const = -np.log(np.pi ** 2 / 16 - (1 / 9)*(np.pi ** 2 / 16) ** 9) / np.pi ** 2  # Proportionality constant
-        print("t1/2:", halfway_t, " 1/2:", halfway_point, " Cp:", prop_const)
         D = prop_const * sl ** 2 / halfway_t  # Initial guess for diffusivity
         self.rhs[filename] = 1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) * np.exp(
             -D * (2 * n + 1) ** 2 * np.pi ** 2 * (self.D_time[filename]) /
-            (4 * (sl / 2) ** 2)) for n in range(0, 20)])  # . todo in manuscript, make sure it says first 20
+            (4 * (sl / 2) ** 2)) for n in range(0, 20)])
 
         # Function for optimizing D using curve fit
         def f(xdata, D_opt, dt_opt, A_opt):
@@ -1760,7 +1759,7 @@ class AdjustPVars(tk.Toplevel):
 
         parent = tk.Frame(self)
         parent.grid(row=14, column=0, columnspan=7, sticky="nsew", pady=5)
-        self.add_entry(self, parent, variable=self.inputs, key='num_GasT0', text="Number of TCs measuring GasT0:",
+        self.add_entry(self, parent, variable=self.inputs, key='num_GasT0', text="Number of TCs measuring initial GasT:",
                        subscript='', ent_w=3, tvar=self.num_GasT0, units='', row=0, column=0, in_window=True,
                        command=lambda tvar, variable, key, pf: self.one_to_max(tvar, variable, key, pf))
         self.add_entry(self, parent, variable=self.inputs, key='num_GasT', text="Number of TCs measuring GasT:",

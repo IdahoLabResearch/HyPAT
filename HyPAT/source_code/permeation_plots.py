@@ -288,7 +288,7 @@ class PermeationPlots(tk.Frame):
         # Popout Plot button is clicked
         plt.close("all")
 
-    def toggle_coordinates(self): # .
+    def toggle_coordinates(self):
         """ Toggles between being able to see coordinates while hovering over plots """
         if self.coord_b.config('text')[-1] == 'Enable Coordinates':
             # Turn on coordinates
