@@ -132,8 +132,10 @@ class PermeationPlots(tk.Frame):
         # diffusivity variables
         self.intercept = {}
         self.tlag = {}
-        self.D = {}
+        self.D = {}  # diffusivity
         self.D_err = {}
+        self.A = {}  # proportionality constant  # .
+        self.dt = {}  # additive time constant  # .
         self.D_time = {}  # time over which D is calculated
         self.lhs = {}  # for the diffusivity optimization comparison
         self.rhs = {}  # time-lag method
@@ -620,6 +622,8 @@ class PermeationPlots(tk.Frame):
                  "Diffusivity Uncertainty [m^2 s^-1]": self.D_err[filename],
                  "Solubility [mol m^-3 Pa^-0.5]": self.Ks[filename],
                  "Solubility Uncertainty [mol m^-3 Pa^-0.5]": self.Ks_err[filename],
+                 "Proportionality Constant A": self.A[filename],
+                 "Additive Time Constant dt [s]": self.dt[filename]
                  }, index=[filename]
                 )])
         self.storage.TransportParameters = df
@@ -1273,7 +1277,7 @@ class PermeationPlots(tk.Frame):
             # Function for optimizing D using curve fit
             rhs = 1 + 2 * sum(
                 [(-1) ** n * np.exp(-D_opt * n ** 2 * np.pi ** 2 * (xdata + dt_opt) / sl ** 2) for n in range(1, 20)])
-            return rhs / A_opt
+            return rhs * A_opt
 
         # Attempt to optimize D using curve fit and the above function. Show a warning if it fails due to RuntimeError
         try:
@@ -1300,11 +1304,11 @@ class PermeationPlots(tk.Frame):
         perr = np.sqrt(np.diag(pcov))
         self.D_err[filename] = perr[0]
 
-        # Store D and rhs_cf for use elsewhere in program
-        self.D[filename], dt, A = popt
-        self.rhs_cf[filename] = 1 + 2 * sum(
-            [(-1) ** n * np.exp(-self.D[filename] * n ** 2 * np.pi ** 2 * (self.D_time[filename] + dt) / sl ** 2)
-             for n in range(1, 20)])
+        # Store D, dt, A, and rhs_cf for use elsewhere in program
+        self.D[filename], self.dt[filename], self.A[filename] = popt
+        self.rhs_cf[filename] = self.A[filename] * (1 + 2 * sum(
+            [(-1) ** n * np.exp(-self.D[filename] * n ** 2 * np.pi ** 2 * (self.D_time[filename] + self.dt[filename]) /
+                                sl ** 2) for n in range(1, 20)]))
         if debug:
             lhs = A * (Jt - J0) / (Jinf - J0)
             plt.figure()

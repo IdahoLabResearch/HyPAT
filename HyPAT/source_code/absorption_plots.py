@@ -133,6 +133,8 @@ class AbsorptionPlots(tk.Frame):
         # diffusivity variables
         self.D = {}
         self.D_err = {}
+        self.A = {}  # proportionality constant  # .
+        self.dt = {}  # additive time constant  # .
         self.D_time = {}  # time over which D is calculated
         self.lhs = {}  # for the diffusivity optimization comparison
         self.rhs = {}  # analytical solution (non-fit)
@@ -185,7 +187,7 @@ class AbsorptionPlots(tk.Frame):
         entry_row += 1
 
         self.add_entry3(self, self.frame, variable=self.inputs, key="Vsc_cm3", text="Sample Container Volume: V",
-                        subscript="tc", tvar1=self.Vsc_cm3, tvar2=self.Vsc_cm3_err, units="[cm\u00B3]",  # "[cm^3]"
+                        subscript="sc", tvar1=self.Vsc_cm3, tvar2=self.Vsc_cm3_err, units="[cm\u00B3]",  # "[cm^3]"
                         update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
                         row=entry_row)
         entry_row += 1
@@ -713,7 +715,9 @@ class AbsorptionPlots(tk.Frame):
                  "Solubility [mol m^-3 Pa^-0.5]": self.Ks[filename],
                  "Solubility Uncertainty [mol m^-3 Pa^-0.5]": self.Ks_err[filename],
                  "Sample Composition [H/M]": self.HM[filename],
-                 "Sample Composition Uncertainty [H/M]": self.HM_err[filename]
+                 "Sample Composition Uncertainty [H/M]": self.HM_err[filename],
+                 "Proportionality Constant A": self.A[filename],
+                 "Additive Time Constant dt [s]": self.dt[filename]
                  }, index=[filename]
                 )])
         self.storage.TransportParameters = df
@@ -1276,7 +1280,7 @@ class AbsorptionPlots(tk.Frame):
             rhs = 1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) *
                            np.exp(-D_opt * (2 * n + 1) ** 2 * np.pi ** 2 * (xdata + dt_opt) / (4 * (sl / 2) ** 2))
                            for n in range(0, 20)])  # sl/2 because the book's equation goes from -l to l, not 0 to l
-            return rhs / A_opt
+            return rhs * A_opt
 
         # Attempt to optimize D using curve fit and the above function. Show a warning if it fails
         try:
@@ -1304,11 +1308,11 @@ class AbsorptionPlots(tk.Frame):
             print('pcov:\n', pcov)
             print("perr:", perr)
 
-        # Store D and rhs_cf for use elsewhere in program
-        self.D[filename], dt, A = popt
-        self.rhs_cf[filename] = 1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) * np.exp(
-            -self.D[filename] * (2 * n + 1) ** 2 * np.pi ** 2 * (self.D_time[filename] + dt) /
-            (4 * (sl / 2) ** 2)) for n in range(0, 20)])
+        # Store D, dt, A and rhs_cf for use elsewhere in program
+        self.D[filename], self.dt[filename], self.A[filename] = popt
+        self.rhs_cf[filename] = self.A[filename] * (1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) * np.exp(
+            -self.D[filename] * (2 * n + 1) ** 2 * np.pi ** 2 * (self.D_time[filename] + self.dt[filename]) /
+            (4 * (sl / 2) ** 2)) for n in range(0, 20)]))
 
         if debug:
             plt.figure()
