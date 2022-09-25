@@ -134,8 +134,8 @@ class PermeationPlots(tk.Frame):
         self.tlag = {}
         self.D = {}  # diffusivity
         self.D_err = {}
-        self.A = {}  # proportionality constant  # .
-        self.dt = {}  # additive time constant  # .
+        self.A = {}  # proportionality constant
+        self.dt = {}  # additive time constant
         self.D_time = {}  # time over which D is calculated
         self.lhs = {}  # for the diffusivity optimization comparison
         self.rhs = {}  # time-lag method

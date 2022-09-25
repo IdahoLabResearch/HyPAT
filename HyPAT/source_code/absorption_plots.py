@@ -133,8 +133,8 @@ class AbsorptionPlots(tk.Frame):
         # diffusivity variables
         self.D = {}
         self.D_err = {}
-        self.A = {}  # proportionality constant  # .
-        self.dt = {}  # additive time constant  # .
+        self.A = {}  # proportionality constant
+        self.dt = {}  # additive time constant
         self.D_time = {}  # time over which D is calculated
         self.lhs = {}  # for the diffusivity optimization comparison
         self.rhs = {}  # analytical solution (non-fit)
