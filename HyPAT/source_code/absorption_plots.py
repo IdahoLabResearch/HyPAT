@@ -1485,10 +1485,13 @@ class AbsorptionPlots(tk.Frame):
 
     def pres_comp_temp_plot(self, fig2, ax2):
         """ Creates the pressure vs composition (bottom middle) plot and color codes using temperature """
-        # Group data files according to their temperature to the tens place
+        # Group data files according to their temperature to the nearest temperature divisible by 5
+        # todo Perhaps allow this to round to tens in the case that the scatter of sample temp is larger than 2.5 deg C
         approx_temps = {}
         for filename in self.datafiles.keys():
-            approx_temps[filename] = round(self.Ts_e[filename] - self.storage.standard_temp, -1)
+            approx_temps[filename] = round(round(2 * (self.Ts_e[filename] - self.storage.standard_temp), -1) / 2)
+            # Round to ten:
+            # approx_temps[filename] = round(self.Ts_e[filename] - self.storage.standard_temp, -1)
         # Sort the grouped temperatures
         # https://www.geeksforgeeks.org/python-sort-python-dictionaries-by-key-or-value/
         sorted_temps = sorted(approx_temps.items(), key=lambda kv: (kv[1], kv[0]))
