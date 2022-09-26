@@ -316,7 +316,7 @@ class ORingsAndDefaultVals(tk.Toplevel):
         self.add_entry = widgets.add_entry
 
         self.title("Add or Edit O-Rings / Edit Default Values")
-        self.resizable(width=False, height=False)
+        # self.resizable(width=False, height=False)
         self.minsize(400, 170)
 
         # gui_x/y values determined by running self.updateidletasks() at the end of self.__init__ and then printing size

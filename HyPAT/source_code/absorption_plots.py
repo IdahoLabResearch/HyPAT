@@ -1416,23 +1416,23 @@ class AbsorptionPlots(tk.Frame):
             # Do things depending on which plot is going to be the popout plot
             if plot == self.ax_title:
                 # PDK plot
-                fig, axis = plt.subplots()
+                fig, axis = plt.subplots(layout="constrained")
                 self.PDK_plot(axis)
 
             elif plot == self.ax1_title:
                 # Pressure vs Time
-                fig, ax1 = plt.subplots()
+                fig, ax1 = plt.subplots(layout="constrained")
                 ax12 = ax1.twinx()
                 self.pressure_time_plot(data, filename, fig, ax1, ax12)
 
             elif plot == self.ax2_title:
                 # Pressure vs Composition
-                fig, ax2 = plt.subplots()
+                fig, ax2 = plt.subplots(layout="constrained")
                 self.pres_comp_temp_plot(fig, ax2)
 
             elif plot == self.ax3_title:
                 # diffusivity comparison plots for optimization
-                fig, ax3 = plt.subplots()
+                fig, ax3 = plt.subplots(layout="constrained")
                 self.comparison_plot(filename, ax3)
 
         else:
@@ -1657,7 +1657,7 @@ class AdjustPVars(tk.Toplevel):
         self.add_entry = widgets.add_entry
 
         self.title("Adjust Persistent Variables")
-        self.resizable(width=False, height=False)
+        # self.resizable(width=False, height=False)
         self.minsize(400, 200)
 
         # gui_x/y values determined by running self.updateidletasks() at the end of self.__init__ and then printing size
@@ -1668,7 +1668,7 @@ class AdjustPVars(tk.Toplevel):
             height = 424
             extra_width = 205  # width to add for each new TC beyond three
         else:
-            width = 680
+            width = 710
             height = 330
             extra_width = 165
         pos_right = int(pos[0] + (gui_x - width) / 2)
@@ -2146,7 +2146,7 @@ class APSettingsHelp(tk.Toplevel):
         super().__init__(*args, **kwargs)
 
         self.title("Help for Absorption's Persistent Variables Settings")
-        self.resizable(width=False, height=False)
+        # self.resizable(width=False, height=False)
         self.minsize(400, 200)
 
         if platform.system() == 'Darwin':

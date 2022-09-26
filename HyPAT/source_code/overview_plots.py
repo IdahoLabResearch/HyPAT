@@ -256,7 +256,7 @@ class Plots(tk.Frame):
                     " [mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]\n" + \
                     "Activation energy for permeability: {:.2e} +/- {:.2e}".format(P_fit[0], P_uncert[0]) + \
                     " [kJ mol\u207b\u00b9]\n\n" + \
-                    "Temperature Range: {} [\u00B0C] - {}".format(round(Tmin), round(Tmax)) + " [\u00B0C]"
+                    "Temperature Range: {} [\u00B0C] to {}".format(round(Tmin), round(Tmax)) + " [\u00B0C]"
 
         # Create a textbox with the text in it
         from tkinter import font
@@ -596,7 +596,7 @@ class EditMaterials(tk.Toplevel):
         self.add_entry = widgets.add_entry
 
         self.title("Add or Edit Materials")
-        self.resizable(width=False, height=False)
+        # self.resizable(width=False, height=False)
         self.minsize(400, 170)
 
         # gui_x/y values determined by running self.updateidletasks() at the end of self.__init__ and then printing size
