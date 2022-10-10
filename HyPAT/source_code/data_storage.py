@@ -255,6 +255,38 @@ class Storage:
             the estimated secondary pressure section.
             Variable names and equations copied from Excel. This method reduced extra calls to the tk variables. """
         # todo update to make more readable
+
+        self.t_L.set(self.x_samp2.get()**2 / 6 / (
+                self.D0.get() * np.exp(-1 * self.E_D.get() * self.invTk.get() / self.R) / np.sqrt(2)))  # s, Time-lag  # fixme I don't think there should be a sqrt(2)
+        self.Pr_D.set(self.P0.get() * np.exp(-1 * self.E_P.get() * self.invTk.get() / self.R) /
+                      np.sqrt(2))  # mol(Q2)/m/s/sqrt(Pa), Molecular permeability  # fixme I don't think there should be a sqrt(2)
+        self.flux.set(self.Pr_D.get() * np.sqrt(self.pP_T2_Pa.get()) / self.x_samp2.get())  # mol(Q2)/s/m^2, Molecular permeation flux  # fixme There should also be something for secondary side pressure, I think
+        self.flux_atoms.set(self.flux.get() * self.Na * 2)  # atoms/s/m^2, Atomic permeation flux
+        self.x_sampx_flux.set(self.flux.get() * self.x_samp2.get())  # mol(Q2)/m/s
+        self.Q.set(self.flux.get() * self.A_perm.get())  # mol(Q2)/s, Molecular permeation rate
+        self.del_sP.set(self.Q.get() / self.cc_to_mole / self.sV.get() * 760)  # Torr/s, rate of pressure increase  # fixme This seems wrongs. The units check out. Shouln't it be (dn/dt)*RT/V?
+        self.del_sP_Pa.set(self.del_sP.get() * self.torr_to_pa)  # Pa/s
+        self.sP_final.set(self.del_sP.get() * self.t_accum2.get())  # Torr, final secondary pressure
+        self.sP_final2.set(self.del_sP_Pa.get() * self.t_accum2.get())  # Pa
+        # Detectable with capacitance manometer (>1E-4 Torr)
+        if self.sP_final.get() > 0.0001:
+            self.Det_CM.set("YES")
+        else:
+            self.Det_CM.set("NO")
+
+        self.p_QMS.set(self.Q.get() / self.cal_leak_rate.get())
+        # Detectable with QMS (>1E-10 Torr)
+        if self.p_QMS.get() > 0.0000000001:
+            self.Det_QMS.set("YES")
+        else:
+            self.Det_QMS.set("NO")
+        # Saturate with QMS  (>1E-6 Torr)
+        if self.p_QMS.get() > 0.000001:
+            self.Sat_QMS.set("SATURATE")
+        else:
+            self.Sat_QMS.set("OK")
+        # . todo delete
+        """  
         C8 = self.x_samp2.get()
         C13 = self.D0.get()
         C14 = self.E_D.get()
@@ -270,7 +302,7 @@ class Storage:
         C37 = self.torr_to_pa
         G17 = self.t_accum2.get()
         C29 = self.cal_leak_rate.get()
-
+        
         self.t_L.set(C8**2/6/(C13*np.exp(-1*C14*G8/C40)/np.sqrt(2)))
         self.Pr_D.set(C17*np.exp(-1*C18*G8/C40)/np.sqrt(2))
         G21 = self.Pr_D.get()
@@ -304,7 +336,7 @@ class Storage:
         if G31 > 0.000001:
             self.Sat_QMS.set("SATURATE")
         else:
-            self.Sat_QMS.set("OK")
+            self.Sat_QMS.set("OK")"""
 
 
 class Widgets:
