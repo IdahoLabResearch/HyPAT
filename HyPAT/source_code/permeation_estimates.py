@@ -242,7 +242,7 @@ class InputForm(tk.Frame):
         self.add_text(box4, text="Estimated molecular permeability: \u03A6", subscript="",
                       # units="[mol m^-1 s^-1 Pa^-0.5]"
                       units="[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
-                      tvar=self.storage.Pr_D, row=1)
+                      tvar=self.storage.Phi, row=1)
         self.add_text2(box4, text="Estimated molecular permeation flux: J", subscript="inf", subsubscript="",
                        # units=("[mol m^-2 s^-1]", "[atoms m^-2 s^-1]")
                        units=("[mol m\u207b\u00b2 s\u207b\u00b9]", "[atoms m\u207b\u00b2 s\u207b\u00b9]"),
