@@ -92,7 +92,6 @@ class Storage:
         self.Phi = tk.DoubleVar(value=0)  # Estimated permeability
         self.flux = tk.DoubleVar(value=0)  # Estimated molar flux
         self.flux_atoms = tk.DoubleVar(value=0)  # Estimated  atomic flux
-        self.x_sampx_flux = tk.DoubleVar(value=0)  # Estimated flux * sample thickness
         self.Q = tk.DoubleVar(value=0)  # Estimated molecular permeation rate
         self.del_sP = tk.DoubleVar(value=0)  # Estimated rate of pressure increase, Torr/s
         self.del_sP_Pa = tk.DoubleVar(value=0)  # /\, Pa/s
@@ -261,7 +260,6 @@ class Storage:
         self.flux.set(self.Phi.get() *
                       np.sqrt(self.pP_T2_Pa.get()) / self.x_samp2.get())  # mol(Q2)/s/m^2, Molecular permeation flux
         self.flux_atoms.set(self.flux.get() * self.Na * 2)  # atoms/s/m^2, Atomic permeation flux
-        self.x_sampx_flux.set(self.flux.get() * self.x_samp2.get())  # mol(Q2)/m/s
         self.Q.set(self.flux.get() * self.A_perm.get())  # mol(Q2)/s, Molecular permeation rate
         self.del_sP.set((self.Q.get() * self.R * (self.standard_temp + 20) / self.sV.get()) *
                         760)  # Torr/s, rate of pressure increase, assumes room temperature gas

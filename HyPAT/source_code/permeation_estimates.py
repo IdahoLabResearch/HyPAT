@@ -247,10 +247,6 @@ class InputForm(tk.Frame):
                        # units=("[mol m^-2 s^-1]", "[atoms m^-2 s^-1]")
                        units=("[mol m\u207b\u00b2 s\u207b\u00b9]", "[atoms m\u207b\u00b2 s\u207b\u00b9]"),
                        tvar1=self.storage.flux, tvar2=self.storage.flux_atoms, row=2)
-        self.add_text(box4, text="Estimated molecular permeation flux \u00d7 thickness: x",  # times
-                      innersubscript="samp", innertext="J", subscript="inf", subsubscript="",
-                      units="[mol m\u207b\u00b9 s\u207b\u00b9]",  # "[mol m^-1 s^-1]",
-                      tvar=self.storage.x_sampx_flux, row=3)
         self.add_text(box4, text="Estimated molecular permeation rate: Q", subscript="", subsubscript="",
                       units="[mol s\u207b\u00b9]",  # "[mol s^-1]",
                       tvar=self.storage.Q, row=4)
