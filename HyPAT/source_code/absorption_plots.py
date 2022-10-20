@@ -1267,7 +1267,16 @@ class AbsorptionPlots(tk.Frame):
         self.lhs[filename] = (self.ns_t[filename] - ns0) / (self.ns_e[filename] - ns0)
 
         # Calculate D without fitting for an initial guess. Source: Crank, pg238-239
-        halfway_point = max(1, int(np.argmin(abs(self.lhs[filename] - 0.5))))  # todo Maybe add a warning if uses 1?
+        halfway_point = int(np.argmin(abs(self.lhs[filename] - 0.5)))
+        if halfway_point == 1:
+            self.error_texts += "Curve Fit Warning with file " + filename + \
+                                ". Half of the total absorbed hydrogen was absorbed after roughly one time step" + \
+                                ". The time step may be too large to calculate the diffusivity accurately.\n\n"
+        elif halfway_point < 1:
+            halfway_point = 1
+            self.error_texts += "Curve Fit Warning with file " + filename + \
+                                ". Half of the total absorbed hydrogen was absorbed after less than one time step" + \
+                                ". The time step may be too large to calculate the diffusivity accurately.\n\n"
         halfway_t = self.D_time[filename][halfway_point + self.t0[filename] + 1]  # +t0+1 because of indexing
         prop_const = -np.log(np.pi ** 2 / 16 - (1 / 9)*(np.pi ** 2 / 16) ** 9) / np.pi ** 2  # Proportionality constant
         D = prop_const * sl ** 2 / halfway_t  # Initial guess for diffusivity
