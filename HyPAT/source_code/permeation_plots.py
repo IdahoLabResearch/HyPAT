@@ -1236,7 +1236,7 @@ class PermeationPlots(tk.Frame):
             (R * (self.Tg_mean.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename]].to_numpy() +
                   self.storage.standard_temp) * self.A_perm.get())
         self.D_time[filename] = data.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename], 't'] - \
-            data.loc[self.t0[filename] + 1, 't']
+            data.loc[self.t0[filename], 't']
         J0 = np.mean(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 'dSecP']) * \
             self.volume.get() / (R * self.Tg0[filename] * self.A_perm.get())  # leak rate
         Jinf = np.mean(data.loc[self.tss[filename] + 1:

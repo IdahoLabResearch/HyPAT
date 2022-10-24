@@ -1252,7 +1252,7 @@ class AbsorptionPlots(tk.Frame):
         sl = self.sample_thickness.get() * 0.001  # converted to meters
         sl_err = self.sample_thickness_err.get() * 0.001  # converted to meters  # todo Find a way to use this
         self.D_time[filename] = data.loc[self.t0[filename] + 1:self.t_e[filename] + self.e_range[filename], 't'] - \
-                                data.loc[self.t0[filename] + 1, 't']
+                                data.loc[self.t0[filename], 't']
         h = data.loc[1, 't'] - data.loc[0, 't']
 
         # Prepare data for fitting
