@@ -512,7 +512,7 @@ class PermeationPlots(tk.Frame):
                             self.calculate_solubility(filename, self.datafiles[filename])
                     except Exception as e:
                         # If you want to see the traceback as part of the error text, change the below value to true
-                        want_traceback = False
+                        want_traceback = True
                         if want_traceback:
                             import traceback
                             full_traceback = "\n" + traceback.format_exc()
@@ -1278,12 +1278,12 @@ class PermeationPlots(tk.Frame):
             rhs = 1 + 2 * sum(
                 [(-1) ** n * np.exp(-D_opt * n ** 2 * np.pi ** 2 * (xdata + dt_opt) / sl ** 2) for n in range(1, 20)])
             return rhs * A_opt
-
         # Attempt to optimize D using curve fit and the above function. Show a warning if it fails due to RuntimeError
         try:
             if not skipD:  # If not skipping the calculation of D
+                # todo look into making this a weighted curve fit
                 popt, pcov = curve_fit(f, self.D_time[filename], self.lhs[filename], p0=[D, 0, 1], xtol=D * 1e-3,
-                                       bounds=([0, 0, -1000], [10, 10*h, 1000]))
+                                       bounds=([0, -min(self.D_time[filename]), -1000], [10, 10*h, 1000]))
             else:
                 NaN = float("NaN")
                 popt = [NaN, NaN, NaN]
@@ -1303,7 +1303,6 @@ class PermeationPlots(tk.Frame):
             pcov = np.array([[NaN, NaN, NaN], [NaN, NaN, NaN], [NaN, NaN, NaN]])
         perr = np.sqrt(np.diag(pcov))
         self.D_err[filename] = perr[0]
-
         # Store D, dt, A, and rhs_cf for use elsewhere in program
         self.D[filename], self.dt[filename], self.A[filename] = popt
         self.rhs_cf[filename] = self.A[filename] * (1 + 2 * sum(

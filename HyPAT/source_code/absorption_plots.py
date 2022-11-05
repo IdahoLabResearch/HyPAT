@@ -67,6 +67,7 @@ class AbsorptionPlots(tk.Frame):
         self.init_time = 0  # Initial datetime in seconds (used for datetime conversion to seconds)
         self.extra_time = 0  # Extra time to be accounted for (used for datetime conversion to seconds)
         self.error_texts = ""  # Text variable for storing the uncertainty texts that may come up when files are loaded
+        self.troubleshooting_df = pd.DataFrame()  # DataFrame to contain variables when troubleshooting
 
         self.num_GasT0 = 1  # Number of TCs measuring GasT initial
         self.num_GasT = 1  # Number of TCs measuring GasT after the isolation valve has opened
@@ -82,15 +83,15 @@ class AbsorptionPlots(tk.Frame):
         self.Pres_perr = {}  # percentage, (proportional uncertainty)
 
         # variables for input and uncertainty of inputs
-        self.sample_thickness = tk.DoubleVar(value=0.1)
+        self.sample_thickness = tk.DoubleVar(value=0.2)
         self.sample_thickness_err = tk.DoubleVar(value=round(self.sample_thickness.get()*0.05, 13))
-        self.Vs_cm3 = tk.DoubleVar(value=2.9e-2)   # Volume of initial container
+        self.Vs_cm3 = tk.DoubleVar(value=5.8e-2)   # Volume of initial container
         self.Vs_cm3_err = tk.DoubleVar(value=round(self.Vs_cm3.get() * 0.005, 13))
         self.Vic_cm3 = tk.DoubleVar(value=379.0)  # Volume of initial container
         self.Vic_cm3_err = tk.DoubleVar(value=2.3)  # round(self.Vic_cm3.get() * 0.005, 13))
         self.Vsc_cm3 = tk.DoubleVar(value=66.4)  # cm^3 Volume of sample container
-        self.Vsc_cm3_err = tk.DoubleVar(value=0.6)  #round(self.Vsc_cm3.get() * 0.005, 13))
-        self.ms_g = tk.DoubleVar(value=1)  # g Mass of sample
+        self.Vsc_cm3_err = tk.DoubleVar(value=0.6)  # round(self.Vsc_cm3.get() * 0.005, 13))
+        self.ms_g = tk.DoubleVar(value=2)  # g Mass of sample
         self.ms_g_err = tk.DoubleVar(value=round(self.ms_g.get() * 0.05, 13))
         # todo Uncomment self.rhos_gcm3 and self.rho_gcm3_err here and elsewhere, then connect them to the code so they
         #      do things and update when needed
@@ -124,6 +125,8 @@ class AbsorptionPlots(tk.Frame):
         self.pr0_avg = {}  # Pressure at t0 (using an average) (Pa)
         self.pr_e_avg = {}  # Pressure at t_e (using an average) (Pa)
         self.pr_e_err = {}
+        self.ns0 = {}  # Initial moles absorbed by sample
+        self.ns0_err = {}
         self.ns_e = {}  # Total moles absorbed by sample
         self.ns_e_err = {}
         self.ns_t = {}  # Number of moles in sample as a function of time
@@ -636,6 +639,13 @@ class AbsorptionPlots(tk.Frame):
 
             self.update_dataframe()
             self.update_option_menu()
+            # If data has been loaded into self.troubleshooting_df, save it to an XLSX file for analysis
+            if len(self.troubleshooting_df.index) != 0:
+                # This dataframe can be generated anywhere in the processing and then turned into an XLSX here
+                self.troubleshooting_df.to_excel("Troubleshooting File.xlsx")
+                print("TROUBLESHOOTING FILE SAVED")
+                self.troubleshooting_df = pd.DataFrame()  # Reset the dataframe after exporting
+
 
             try:
                 self.current_file.set(self.options[0])
@@ -1174,17 +1184,41 @@ class AbsorptionPlots(tk.Frame):
         self.pr_e_avg[filename] = \
             data.loc[self.t_e[filename] + 1: self.t_e[filename] + self.e_range[filename], 'Pres'].mean()
 
+        # Obtain values from previous pressure for calculations
+        if self.exp_type.get() == "Isotherm" and filename[-1] != "1":
+            # Get the filename of the previous pressure
+            pressure_number = str(int(filename[-1]) - 1)
+            last_filename = filename[:-1] + pressure_number
+            # Get info on number of moles absorbed in the sample previously
+            self.ns0[filename] = self.ns_e[last_filename]  # Initial number of moles in sample at t0
+            self.ns0_err[filename] = self.ns_e_err[last_filename]
+            # Calculate number of moles in sample container when isolation valve is closed
+            pr_sc0 = self.pr_e_avg[last_filename]  # Initial pressure in sample container
+            pr_sc0_err = self.pr_e_err[last_filename]
+            T_sc0 = self.Tg_e[last_filename]   # Initial temperature in sample container
+            T_sc0_err = self.Tg_e_err[last_filename]
+            n_sc0 = pr_sc0 * V_sc / R / T_sc0  # Initial number of moles in sample container
+            n_sc0_err = abs(n_sc0) * np.sqrt((pr_sc0_err / pr_sc0) ** 2 + (T_sc0_err / T_sc0) ** 2 +
+                                             (V_sc_err / V_sc) ** 2)
+        else:
+            #  Assume there weren't previous experiments
+            self.ns0[filename] = 0  # Initial number of moles in sample
+            self.ns0_err[filename] = 0
+            n_sc0 = 0  # Initial number of moles in sample container
+            n_sc0_err = 0
+
         # calculate moles
-        nc0 = self.pr0_avg[filename] * V_ic / R / self.Tg0[filename]
+        n_ci0 = self.pr0_avg[filename] * V_ic / R / self.Tg0[filename]  # Initial number of moles in initial container
+        nc0 = n_ci0 + n_sc0  # Total number of moles at start
         nc_e = self.pr_e_avg[filename] * V_totc / R / self.Tg_e[filename]
-        self.ns_e[filename] = nc0 - nc_e
+        self.ns_e[filename] = nc0 - nc_e + self.ns0[filename]
 
         # Pressure as a function of time (Pa)
         pr_t = data.loc[self.t0[filename] + 1:self.t_e[filename] + self.e_range[filename], 'Pres'].to_numpy()
         # Moles in the sample as a function of time (mol)
         self.ns_t[filename] = nc0 - pr_t * V_totc / R / \
             (Tg_fmean.loc[self.t0[filename] + 1:self.t_e[filename] + self.e_range[filename]].to_numpy()
-             + self.storage.standard_temp)
+             + self.storage.standard_temp) + self.ns0[filename]
 
         # calculate solubility
         self.Ks[filename] = self.ns_e[filename] / Vs / np.sqrt(self.pr_e_avg[filename])
@@ -1214,14 +1248,37 @@ class AbsorptionPlots(tk.Frame):
         Pres_e_err = max(data.loc[self.t_e[filename] + 1:self.t_e[filename] + self.e_range[filename], 'Pres'].std(),
                          self.Pres_cerr["Pres"], self.pr_e_avg[filename] * self.Pres_perr["Pres"] / 100)
         # Moles uncertainties
-        nc0_err = abs(nc0) * np.sqrt((Pres0_err / self.pr0_avg[filename]) ** 2 + (V_ic_err / V_ic) ** 2 +
+        n_ci0_err = abs(nc0) * np.sqrt((Pres0_err / self.pr0_avg[filename]) ** 2 + (V_ic_err / V_ic) ** 2 +
                                      (Tg0_err / self.Tg0[filename]) ** 2)
+        nc0_err = np.sqrt(n_ci0_err ** 2 + n_sc0_err ** 2)
         nce_err = abs(nc_e) * np.sqrt((Pres_e_err / self.pr_e_avg[filename]) ** 2 + (V_totc_err / V_totc) ** 2 +
                                       (Tge_err / self.Tg_e[filename]) ** 2)
-        nse_err = np.sqrt(nc0_err ** 2 + nce_err ** 2)
+        nse_err = np.sqrt(nc0_err ** 2 + nce_err ** 2 + self.ns0_err[filename] ** 2)
+
         # Solubility uncertainty
         self.Ks_err[filename] = abs(self.Ks[filename]) * np.sqrt(
             (nse_err / self.ns_e[filename]) ** 2 + (Vs_err / Vs) ** 2 + (Pres_e_err / 2 / self.pr_e_avg[filename]) ** 2)
+
+        # Uncomment to have a data file created at the end of processing. You can also change this df to match your need
+        # self.troubleshooting_df = pd.concat([self.troubleshooting_df, pd.DataFrame(
+        #         {"index": filename[-1],
+        #          "Ks": self.Ks[filename],
+        #          "Ks_err": self.Ks_err[filename],
+        #          "Ks_err/Ks": self.Ks_err[filename]/self.Ks[filename],
+        #          "nse": self.ns_e[filename],
+        #          "nse_err": nse_err,
+        #          "nc0": nc0,
+        #          "nc0_err**2": nc0_err**2,
+        #          "nc_e": nc_e,
+        #          "nce_err**2": nce_err**2,
+        #          "pr0_avg": self.pr0_avg[filename],
+        #          "Pres0_err": Pres0_err,
+        #          "(Pres0_err/pr0_avg) ** 2": (Pres0_err / self.pr0_avg[filename]) ** 2,
+        #          "pr_e_avg": self.pr_e_avg[filename],
+        #          "Pres_e_err": Pres_e_err,
+        #          "(Pres_e_err/pr_e_avg) ** 2": (Pres_e_err / self.pr_e_avg[filename]) ** 2
+        #          }, index=[filename]
+        #     )])
 
         # Store uncertainties
         self.ns_e_err[filename] = nse_err
@@ -1235,6 +1292,19 @@ class AbsorptionPlots(tk.Frame):
         self.HM[filename] = H_num / a_num  # Hydrogen to metal atoms ratio
         self.HM_err[filename] = abs(self.HM[filename]) * np.sqrt((self.ms_g_err.get()/self.ms_g.get()) ** 2 +
                                                                  (nse_err / self.ns_e[filename]) ** 2)
+
+        # Uncomment to have a data file created at the end of processing. You can also change this df to match your need
+        # self.troubleshooting_df = pd.concat(
+        #     [self.troubleshooting_df, pd.DataFrame(
+        #         {"index": filename[-1],
+        #          "HM": self.HM[filename],
+        #          "HM_err": self.HM_err[filename],
+        #          "HM_err/HM": self.HM_err[filename] / self.HM[filename],
+        #          "ns_e": self.ns_e[filename],
+        #          "nse_err": nse_err,
+        #          "(nse_err/ns_e)**2": (nse_err / self.ns_e[filename]) ** 2,
+        #          }, index=[filename]
+        #     )])
 
         # Get temp from sample TC
         self.Ts0[filename] = data.loc[self.t0[filename] - self.i_range[filename]:self.t0[filename] - 1, 'SampT'].mean() + \
@@ -1256,15 +1326,7 @@ class AbsorptionPlots(tk.Frame):
         h = data.loc[1, 't'] - data.loc[0, 't']
 
         # Prepare data for fitting
-        if self.exp_type.get() == "Isotherm" and filename[-1] != "1":
-            pressure_number = str(int(filename[-1]) - 1)
-            last_filename = filename[:-1] + pressure_number
-            ns0 = self.ns_e[last_filename]
-            ns0_err = self.ns_e_err[last_filename]  # todo Find a way to use this
-        else:
-            ns0 = 0
-            ns0_err = 0
-        self.lhs[filename] = (self.ns_t[filename] - ns0) / (self.ns_e[filename] - ns0)
+        self.lhs[filename] = (self.ns_t[filename] - self.ns0[filename]) / (self.ns_e[filename] - self.ns0[filename])
 
         # Calculate D without fitting for an initial guess. Source: Crank, pg238-239
         halfway_point = int(np.argmin(abs(self.lhs[filename] - 0.5)))
@@ -1292,9 +1354,9 @@ class AbsorptionPlots(tk.Frame):
             return rhs * A_opt
 
         # Attempt to optimize D using curve fit and the above function. Show a warning if it fails
-        try:
+        try:  # todo look into making this a weighted curve fit
             popt, pcov = curve_fit(f, self.D_time[filename], self.lhs[filename], p0=[D, 0, 1], xtol=D*1e-3,
-                                   bounds=([0, 0, -1000], [10, 10*h, 1000]))
+                                   bounds=([0, -min(self.D_time[filename]), -1000], [10, 10*h, 1000]))
         except RuntimeError:
             self.error_texts += "Curve Fit Error with file " + filename + \
                                 ". Curve fit unable to find optimal diffusivity parameters.\n\n"
