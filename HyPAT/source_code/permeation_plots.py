@@ -1098,7 +1098,7 @@ class PermeationPlots(tk.Frame):
         try:
             if not skipD:  # If not skipping the calculation of D
                 popt, pcov = curve_fit(f, self.D_time[filename], self.lhs[filename], p0=[D, 0, 1], xtol=D * 1e-3,
-                                       bounds=([0, 0, -1000], [10, 10*h, 1000]))
+                                       bounds=([0, -min(self.D_time[filename]), -1000], [10, 10*h, 1000]))
             else:
                 NaN = float("NaN")
                 popt = [NaN, NaN, NaN]
