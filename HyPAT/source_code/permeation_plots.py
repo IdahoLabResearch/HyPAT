@@ -14,7 +14,7 @@ from .data_storage import Widgets, LoadingScreen
 from scipy.optimize import curve_fit
 import mplcursors  # adds the hover-over feature to labels. This library has good documentation
 import openpyxl
-import platform  # allows for Mac vs Windows adaptions
+import platform  # allows for Mac vs. Windows adaptions
 # make certain warnings appear as errors, allowing them to be caught using a try/except clause
 import warnings
 from scipy.optimize import OptimizeWarning
@@ -120,7 +120,7 @@ class PermeationPlots(tk.Frame):
         self.Tg0 = {}  # Temperature of gas at t0 (using an average over time and instruments) (K)
         self.Tgss = {}  # Temperature of gas at tss (using an average over time and instruments) (K)
         self.Tgss_err = {}
-        self.artists = []  # store points for Perm/Dif/Sol vs Temp graph
+        self.artists = []  # store points for Perm/Dif/Sol vs. Temp graph
         self.Tsamp0 = {}  # Sample temperature at t0 (using an average over time and instruments) (K)
         self.Tsampss = {}  # Sample temperature at tss (using an average over time and instruments) (K)
         self.Tsampss_err = {}
@@ -229,7 +229,7 @@ class PermeationPlots(tk.Frame):
         self.message_function = {}
 
         # create bottom left plot
-        self.ax_title = "Permeability vs Temperature"
+        self.ax_title = "Permeability vs. Temperature"
         self.ax_xlabel = "Temperature (\u00B0C)"
         self.ax_ylabel = "Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
         self.fig, self.ax, self.canvas, self.toolbar = self.add_plot(self.bottom_frame,
@@ -238,7 +238,7 @@ class PermeationPlots(tk.Frame):
                                                                      title=self.ax_title,
                                                                      row=0, column=0, axes=[.3, .15, .65, .75])
         # create top right plot
-        self.ax1_title = "Pressure vs Time"
+        self.ax1_title = "Pressure vs. Time"
         self.ax1_xlabel = "Time (s)"
         self.ax1_ylabel = "Secondary Pressure (Pa)"
         self.ax12_ylabel = "Primary Pressure (Pa)"
@@ -256,7 +256,7 @@ class PermeationPlots(tk.Frame):
         self.ax12.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
 
         # Create bottom middle plot
-        self.ax2_title = "Permeability vs Time"
+        self.ax2_title = "Permeability vs. Time"
         self.ax2_xlabel = "Time (s)"
         self.ax2_ylabel = r"Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
         self.ax22_ylabel = "Sample Temperature (\u00B0C)"
@@ -387,7 +387,7 @@ class PermeationPlots(tk.Frame):
         b.pack(side="left", padx=1)
 
         # Add a button that allows user input of various steady state variables
-        if title == 'Pressure vs Time':
+        if title == 'Pressure vs. Time':
             entry_frame = tk.Frame(toolbar)
             entry_frame.pack(side="left", padx=1)
             b = tk.Button(entry_frame, text='Steady State Variables', command=self.adjust_ss_vars)
@@ -1189,7 +1189,7 @@ class PermeationPlots(tk.Frame):
         self.SecP_err[filename] = SecP_err
         self.PrimP_err[filename] = PrimP_err
 
-        # Data for permeability vs time graph
+        # Data for permeability vs. time graph
         self.Perm_Plot[filename] = ((dSecP - self.pleak_lf[filename]["slope"]) * self.volume.get() * sl) / \
                                    (((data['PrimP']) ** 0.5 - (
                                                         data['SecP']) ** 0.5) * R * (
@@ -1345,13 +1345,13 @@ class PermeationPlots(tk.Frame):
         self.ax22.clear()
         self.ax3.clear()
 
-        # Permeability/Diffusivity/Solubility vs Temperature and Flux vs Pressure (bottom left graph)
+        # Permeability/Diffusivity/Solubility vs. Temperature and Flux vs. Pressure (bottom left graph)
         self.PDK_plot(self.ax)
 
-        # Pressure vs Time (top right graph)
+        # Pressure vs. Time (top right graph)
         self.pressure_time_plot(data, filename, self.fig1, self.ax1, self.ax12)
 
-        # Permeation vs Time (bottom middle graph)
+        # Permeation vs. Time (bottom middle graph)
         self.perm_time_plot(data, filename, self.fig2, self.ax2, self.ax22)
 
         # Diffusivity comparison plots for optimization (bottom right graph)
@@ -1409,13 +1409,13 @@ class PermeationPlots(tk.Frame):
                 self.PDK_plot(axis)
 
             elif plot == self.ax1_title:
-                # Pressure vs Time
+                # Pressure vs. Time
                 fig, ax1 = plt.subplots(layout="constrained")
                 ax12 = ax1.twinx()
                 self.pressure_time_plot(data, filename, fig, ax1, ax12)
 
             elif plot == self.ax2_title:
-                # Permeation vs Time
+                # Permeation vs. Time
                 fig, ax2 = plt.subplots(layout="constrained")
                 ax22 = ax2.twinx()
                 self.perm_time_plot(data, filename, fig, ax2, ax22)
@@ -1430,7 +1430,7 @@ class PermeationPlots(tk.Frame):
         plt.show()
 
     def pressure_time_plot(self, data, filename, fig1, ax1, ax12):
-        """ Creates the pressure vs time (top right) plot """
+        """ Creates the pressure vs. time (top right) plot """
         # Plot the point where the isolation valve opens and where steady state is determined
         ax1.plot(data.loc[self.t0[filename], 't'], data.loc[self.t0[filename], 'SecP'], 'yo', label="t$_0$")
         ax1.plot(data.loc[self.tss[filename], 't'], data.loc[self.tss[filename], 'SecP'], 'mo', label="t$_{ss}$")
@@ -1479,7 +1479,7 @@ class PermeationPlots(tk.Frame):
                     bbox_transform=ax1.transAxes, framealpha=0.5)
 
     def perm_time_plot(self, data, filename, fig2, ax2, ax22):
-        """ Creates the permeability vs time (bottom middle) plot """
+        """ Creates the permeability vs. time (bottom middle) plot """
         # Plot the permeability over time
         ax2.plot(data.loc[self.t0[filename]:, 't'], self.Perm_Plot[filename].iloc[self.t0[filename]:],
                  label="RT Perm")
@@ -1487,7 +1487,7 @@ class PermeationPlots(tk.Frame):
         ax2.set_xlabel(self.ax2_xlabel)
         ax2.set_ylabel(self.ax2_ylabel)
 
-        # Plot temperature vs time and set relevant axes
+        # Plot temperature vs. time and set relevant axes
         ax22.plot(data.loc[self.t0[filename]:, 't'], data.loc[self.t0[filename]:, 'SampT'], color='orange',
                   label='Sample T')
         ax22.set_ylabel(self.ax22_ylabel)
@@ -1533,12 +1533,12 @@ class PermeationPlots(tk.Frame):
 
         # Set plot title
         if plot == "Flux":
-            self.ax_title = plot + " vs Pressure"
+            self.ax_title = plot + " vs. Pressure"
             self.ax.loglog()
         else:
-            self.ax_title = plot + " vs Temperature"
+            self.ax_title = plot + " vs. Temperature"
 
-        # store as a local variable to allow for a different xlabel in the flux vs pressure plot
+        # store as a local variable to allow for a different xlabel in the flux vs. pressure plot
         xlabel = self.ax_xlabel
 
         # set y labels to get units right

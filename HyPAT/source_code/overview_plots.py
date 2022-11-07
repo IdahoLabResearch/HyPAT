@@ -157,7 +157,7 @@ class Plots(tk.Frame):
         self.toolbar.update()
 
     def toggle_multiple_labels(self):
-        """ Toggles between being able to see labels while hovering over lines vs being able to see many labels
+        """ Toggles between being able to see labels while hovering over lines vs. being able to see many labels
             by clicking on the lines """
         if self.b2.config('text')[-1] == 'Enable Multiple Labels':
             mplcursors.Cursor.remove(self.cursor)  # Removes the possibility of double labels

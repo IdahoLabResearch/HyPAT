@@ -14,7 +14,7 @@ from .data_storage import Widgets, FormatLabel, LoadingScreen
 from scipy.optimize import curve_fit
 import mplcursors  # adds the hover-over feature to labels. This library has good documentation
 import openpyxl
-import platform  # allows for Mac vs Windows adaptions
+import platform  # allows for Mac vs. Windows adaptions
 # make certain warnings appear as errors, allowing them to be caught using a try/except clause
 import warnings
 from scipy.optimize import OptimizeWarning
@@ -118,7 +118,7 @@ class AbsorptionPlots(tk.Frame):
         self.Tg0 = {}  # Temperature of gas at t0 (using an average over time and instruments) (K)
         self.Tg_e = {}  # Temperature of gas at t_e (using an average over time and instruments) (K)
         self.Tg_e_err = {}
-        self.artists = []  # store points for Perm/Dif/Sol vs Temp graph
+        self.artists = []  # store points for Perm/Dif/Sol vs. Temp graph
         self.Ts0 = {}  # Sample temperature at t0 (using an average over time and instruments) (K)
         self.Ts_e = {}  # Sample temperature at t_e (using an average over time and instruments) (K)
         self.Ts_e_err = {}
@@ -298,7 +298,7 @@ class AbsorptionPlots(tk.Frame):
         self.message_function = {}
 
         # create bottom left plot
-        self.ax_title = "Solubility vs Temperature"
+        self.ax_title = "Solubility vs. Temperature"
         self.ax_xlabel = "Temperature (\u00B0C)"
         self.ax_ylabel = "Solubility (mol m$^{-3}$ Pa$^{-0.5}$)"
         self.fig, self.ax, self.canvas, self.toolbar = self.add_plot(self.bottom_frame,
@@ -1285,7 +1285,7 @@ class AbsorptionPlots(tk.Frame):
         self.Tg_e_err[filename] = Tge_err
         self.pr_e_err[filename] = Pres_e_err
 
-        # Data for pressure vs composition graph
+        # Data for pressure vs. composition graph
         NA = self.storage.Na  # number of atoms per mole, the Avogadro constant
         a_num = self.ms_g.get() * NA / self.molar_mass.get()  # number of atoms of metal
         H_num = 2 * self.ns_e[filename] * NA  # Number of Hydrogen atoms in the sample
@@ -1415,13 +1415,13 @@ class AbsorptionPlots(tk.Frame):
         self.ax2.clear()
         self.ax3.clear()
 
-        # Permeability/Diffusivity/Solubility vs Temperature (bottom left graph)
+        # Permeability/Diffusivity/Solubility vs. Temperature (bottom left graph)
         self.PDK_plot(self.ax)
 
-        # Pressure vs Time (top right graph)
+        # Pressure vs. Time (top right graph)
         self.pressure_time_plot(data, filename, self.fig1, self.ax1, self.ax12)
 
-        # Pressure vs Composition (bottom middle graph) (color coded by temperature)
+        # Pressure vs. Composition (bottom middle graph) (color coded by temperature)
         self.pres_comp_temp_plot(self.fig2, self.ax2)
 
         # Diffusivity comparison plots for optimization (bottom right graph)
@@ -1491,13 +1491,13 @@ class AbsorptionPlots(tk.Frame):
                 self.PDK_plot(axis)
 
             elif plot == self.ax1_title:
-                # Pressure vs Time
+                # Pressure vs. Time
                 fig, ax1 = plt.subplots(layout="constrained")
                 ax12 = ax1.twinx()
                 self.pressure_time_plot(data, filename, fig, ax1, ax12)
 
             elif plot == self.ax2_title:
-                # Pressure vs Composition
+                # Pressure vs. Composition
                 fig, ax2 = plt.subplots(layout="constrained")
                 self.pres_comp_temp_plot(fig, ax2)
 
@@ -1511,7 +1511,7 @@ class AbsorptionPlots(tk.Frame):
         plt.show()
 
     def pressure_time_plot(self, data, filename, fig1, ax1, ax12):
-        """ Creates the pressure vs time (top right) plot """
+        """ Creates the pressure vs. time (top right) plot """
         # Plot the point where the isolation valve opens and where equilibrium is determined
         ax1.plot(data.loc[self.t0[filename], 't'], data.loc[self.t0[filename], 'Pres'], 'yo', label="t$_0$")
         ax1.plot(data.loc[self.t_e[filename], 't'], data.loc[self.t_e[filename], 'Pres'], 'mo', label="t$_e$")
@@ -1555,7 +1555,7 @@ class AbsorptionPlots(tk.Frame):
                     bbox_transform=ax1.transAxes, framealpha=0.5)
 
     def pres_comp_temp_plot(self, fig2, ax2):
-        """ Creates the pressure vs composition (bottom middle) plot and color codes using temperature """
+        """ Creates the pressure vs. composition (bottom middle) plot and color codes using temperature """
         # Group data files according to their temperature to the nearest temperature divisible by 5
         # todo Perhaps allow this to round to tens in the case that the scatter of sample temp is larger than 2.5 deg C
         approx_temps = {}
@@ -1635,7 +1635,7 @@ class AbsorptionPlots(tk.Frame):
         """ Creates the PDK (bottom left) plot for calculated properties of different files """
         plot = self.current_variable.get()
         artists = []
-        self.ax_title = plot + " vs Temperature"
+        self.ax_title = plot + " vs. Temperature"
 
         # set y labels to get units right
         if plot == "Permeability":

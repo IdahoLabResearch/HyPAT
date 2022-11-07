@@ -4,7 +4,7 @@ from tkinter import ttk
 import numpy as np
 import pandas as pd
 import os
-import platform  # allows for Mac vs Windows adaptions
+import platform  # allows for Mac vs. Windows adaptions
 
 
 class Storage:
