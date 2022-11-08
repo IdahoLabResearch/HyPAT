@@ -1086,11 +1086,11 @@ class AbsorptionPlots(tk.Frame):
         # determine row number when equilibrium pressure is achieved, checking to ensure it is before the end of
         # the file and after the minimum time delay + t0
         dPres = data['dPres'].rolling(window=self.e_range[filename], center=True, min_periods=1).mean()
-        # List of all terms in dPres which are less than -5e-3 (allowing for a slight decline during equilibrium)
-        neg_dPres = np.where(dPres < -5E-3)[0]
-        # Minimum terms in a row required to determine if the pressure drop off was reached
+        # List of all terms in abs(dPres) which are more than 5e-3 (allowing for a slight change during equilibrium)
+        nonzero_dPres = np.where(abs(dPres) > 5E-3)[0]
+        # Minimum terms in a row required to determine if the pressure drop off or other big change was reached
         min_seq = max(self.e_range[filename] // 2 - 1, 1)
-        # variable to store the last point before experiment ends (and/or pressure drops and/or isolation valve opens)
+        # variable to store the last point before experiment ends (and/or pressure changes and/or isolation valve opens)
         e_time_max = len(dPres)
 
         # Check for valve being closed after it was opened and set the max data point accordingly
@@ -1098,16 +1098,16 @@ class AbsorptionPlots(tk.Frame):
         if IVclosed.any():
             e_time_max = (IVclosed[0] + self.t0[filename])
 
-        past_drop = False
-        #  Find where the pressure drops off because the valve was opened or fail to find such a point
-        for count, value in enumerate(neg_dPres[:len(neg_dPres) - min_seq]):
+        past_change = False
+        #  Find where the pressure changes because a valve was opened or fail to find such a point
+        for count, value in enumerate(nonzero_dPres[:len(nonzero_dPres) - min_seq]):
             if e_time_max > value > (self.t0[filename]):  # if the value is in the range for looking for equilibrium,
                 # ...check to see if we are past the initial drop in pressure
-                if np.diff(neg_dPres[count:count + 2]) > 2 and not past_drop:
-                    past_drop = True
-                # ...check for a sequence after the initial drop that is min_seq long in which neg_dPres is less than 0
-                if sum(np.diff(neg_dPres[count:count + min_seq])) <= min_seq and past_drop:
-                    e_time_max = neg_dPres[count]  # set the max time to when the pressure drops
+                if np.diff(nonzero_dPres[count:count + 2]) > 2 and not past_change:
+                    past_change = True
+                # ...check for a sequence post the initial drop that is min_seq long in which abs(dPres) is >5e-3
+                if sum(np.diff(nonzero_dPres[count:count + min_seq])) <= min_seq and past_change:
+                    e_time_max = nonzero_dPres[count]  # set the max time to when the pressure changes
                     break
 
         e_del = np.where(data.loc[self.t0[filename]:, 't'] > self.e_t_del.get() + data.loc[self.t0[filename], 't']
