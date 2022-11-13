@@ -527,7 +527,7 @@ class Plots(tk.Frame):
             self.ax[i].set_xlim(self.xmin, self.max)
 
             # top axis
-            self.axC[i].set_xlabel("Temperature, T (\u00B0C)")
+            self.axC[i].set_xlabel(" Temperature, T (\u00B0C) ")  # Space at the start&end b/c on Mac, T&e are too close
             self.axC[i].set_xlim(self.xmin, self.max)
 
             # redo the top ticks so that they line up with proper positions for Celsius

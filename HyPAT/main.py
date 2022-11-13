@@ -2,9 +2,9 @@
 
     Python Interpreter: 3.8, 3.9, or 3.10
 
-    Python Packages: matplotlib, pandas, numpy, tkmacosx, mplcursors, scipy, and openpyxl
+    Python Packages: Matplotlib, Pandas, NumPy, tkmacosx, mplcursors, SciPy, and openpyxl
 
-    compatible: macOS and Windows 10 """
+    compatible: macOS 12 and Windows 10 """
 from source_code.application import Application
 
 

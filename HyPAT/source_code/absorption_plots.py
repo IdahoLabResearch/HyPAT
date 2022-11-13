@@ -299,7 +299,7 @@ class AbsorptionPlots(tk.Frame):
 
         # create bottom left plot
         self.ax_title = "Solubility vs. Temperature"
-        self.ax_xlabel = "Temperature (\u00B0C)"
+        self.ax_xlabel = " Temperature (\u00B0C) "  # Space at the beginning and end is b/c on Mac, T & e are too close
         self.ax_ylabel = "Solubility (mol m$^{-3}$ Pa$^{-0.5}$)"
         self.fig, self.ax, self.canvas, self.toolbar = self.add_plot(self.bottom_frame,
                                                                      xlabel=self.ax_xlabel,
@@ -310,7 +310,7 @@ class AbsorptionPlots(tk.Frame):
         self.ax1_title = "Raw Data"
         self.ax1_xlabel = "Time (s)"
         self.ax1_ylabel = "Pressure (Pa)"
-        self.ax12_ylabel = "Temperature (\u00B0C)"
+        self.ax12_ylabel = " Temperature (\u00B0C) "  # Space at the beginning & end is b/c on Mac, T & e are too close
         self.fig1, self.ax1, self.canvas1, self.toolbar1 = self.add_plot(self.top_frame,
                                                                          xlabel=self.ax1_xlabel,
                                                                          ylabel=self.ax1_ylabel,

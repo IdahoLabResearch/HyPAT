@@ -230,7 +230,7 @@ class PermeationPlots(tk.Frame):
 
         # create bottom left plot
         self.ax_title = "Permeability vs. Temperature"
-        self.ax_xlabel = "Temperature (\u00B0C)"
+        self.ax_xlabel = " Temperature (\u00B0C) "  # Space at the beginning and end is b/c on Mac, T & e are too close
         self.ax_ylabel = "Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
         self.fig, self.ax, self.canvas, self.toolbar = self.add_plot(self.bottom_frame,
                                                                      xlabel=self.ax_xlabel,
