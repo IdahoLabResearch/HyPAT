@@ -1,6 +1,6 @@
-# Hydrogen Permeation and Absorption Tool (HyPAT) 
+# Hydrogen Permeation and Absorption Tool (HyPAT V2.0.0)
 ## About 
-The Hydrogen Permeation and Absorption Tool (HyPAT) is an application that streamlines data analysis for hydrogen 
+The Hydrogen Permeation and Absorption Tool (HyPAT V2.0.0)  is an application that streamlines data analysis for hydrogen 
 permeation and absorption experiments to measure the following hydrogen transport properties: permeability, diffusivity, 
 and solubility. Specifically, HyPAT analyzes data from gas-driven permeation through metals using the build-up in closed 
 volume method and data from absorption experiments using a Sieverts'-type apparatus. A built-in literature database 
@@ -30,7 +30,7 @@ multiple files. The required user inputs and associated errors are highlighted i
 required sample property. The experimental apparatus parameters are the secondary side volume (m<sup>3</sup>) and 
 permeation surface area (m<sup>2</sup>). 
 
-Clicking the "Steady State Variables" button immediately beneath the top-right plot allows the user to edit the 
+Clicking the "Steady State Variables" button beneath the top-right plot allows the user to edit the 
 tolerance for determining steady state, the delay until steady state, and the number of points used to find the leak 
 rate and steady state rate. The tolerance is the value at which the second derivative of the secondary side pressure 
 with respect to time (∂<sup>2</sup>P/∂t<sup>2</sup>) is approximated to be zero. The delay until steady state is the 
@@ -63,7 +63,7 @@ Specifically, the following parameters are editable:
 
 ###  Usage: Data Analysis with "Absorption Plots" Tab
 
-This tab is similar to the "Permeation Plots" tab. It calculates the hydrogen transport properties permeability, 
+The "Absorption Plots" tab calculates the hydrogen transport properties permeability, 
 diffusivity, and solubility from experimental absorption data obtained using a Sieverts'-type apparatus. HyPAT does this 
 while allowing for batchwise data analysis of multiple files. The required user inputs and associated errors are 
 highlighted in yellow. Thickness (mm), mass (g), volume (cm<sup>3</sup>), and molar mass (g mol<sup>-1</sup>) are the 
@@ -121,7 +121,7 @@ Elsevier (2020); https://doi.org/10.1016/B978-0-12-803581-8.11754-0
 
 ### Usage: Predict Outcomes with "Permeation Estimates" Tab
 
-This tab provides predictions for permeation experiments based on specified user inputs. The required user inputs are 
+The "Permeation Estimates" tab provides predictions for permeation experiments based on specified user inputs. The required user inputs are 
 highlighted in yellow. The sample properties are thickness (mm) and material. The experimental apparatus parameters are 
 O-ring/sealing method, calibrated leak rate (mol s<sup>-1</sup> Torr<sup>-1</sup>), secondary side volume (cc), and 
 accumulation time (hr). The specific test parameters are sample temperature (°C) and primary calculated partial pressure 
