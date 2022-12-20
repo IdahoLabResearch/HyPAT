@@ -1,6 +1,8 @@
 # Hydrogen Permeation Analysis Tool (HyPAT) 
 ## About 
 The Hydrogen Permeation Analysis Tool (HyPAT) is an application that streamlines data analysis for gas-driven permeation through metals using the build-up in closed volume method to measure the following hydrogen transport properties: permeability, diffusivity, and solubility. A built-in literature database provides direct comparison for experimental results as well as timescale and permeation rate estimates for experiment preparation based on the user-input parameters. 
+
+Find more details about HyPAT V1.0.0 on the SoftwareX publication ["HyPAT: A GUI for high-throughput gas-driven hydrogen permeation data analysis"](https://doi.org/10.1016/j.softx.2022.101284). 
 ## Description
 The Hydrogen Permeation Analysis Tool (HyPAT) provides a convenient application that allows the user to prepare experiment estimates, quickly analyze multiple data files, and compare results to literature values based on gas-driven permeation through metals using the build-up method.
 
