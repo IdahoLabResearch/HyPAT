@@ -1052,7 +1052,7 @@ class PermeationPlots(tk.Frame):
             (R * (self.Tg_mean.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename]].to_numpy() +
                   self.storage.standard_temp) * self.A_perm.get())
         self.D_time[filename] = data.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename], 't'] - \
-            data.loc[self.t0[filename] + 1, 't']
+            data.loc[self.t0[filename], 't']
         J0 = np.mean(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 'dSecP']) * \
             self.volume.get() / (R * self.Tg0[filename] * self.A_perm.get())  # leak rate
         Jinf = np.mean(data.loc[self.tss[filename] + 1:
@@ -1098,7 +1098,7 @@ class PermeationPlots(tk.Frame):
         try:
             if not skipD:  # If not skipping the calculation of D
                 popt, pcov = curve_fit(f, self.D_time[filename], self.lhs[filename], p0=[D, 0, 1], xtol=D * 1e-3,
-                                       bounds=([0, 0, -1000], [10, 10*h, 1000]))
+                                       bounds=([0, -min(self.D_time[filename]), -1000], [10, 10*h, 1000]))
             else:
                 NaN = float("NaN")
                 popt = [NaN, NaN, NaN]
