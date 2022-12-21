@@ -205,7 +205,7 @@ class InputForm(tk.Frame):
         box1 = tk.LabelFrame(parent, text="TEMPERATURE INPUT", fg="blue")
         self.add_entry2(self, box1, self.input, key="temp", text="Temperature: T", innersubscript="C",
                         innertext=", T", subscript="K",
-                        units=("[\u2103]", "[K]"), tvar1=self.storage.Tc, tvar2=self.storage.Tk, row=0,
+                        units=("[\u00B0C]", "[K]"), tvar1=self.storage.Tc, tvar2=self.storage.Tk, row=0,
                         conversion=lambda tvar1, variable, key: self.storage.update_temperature(tvar1, variable, key))
         self.add_text(box1, text="Reciprocal temperature: 1/T", subscript="K",
                       units="[1/K]", tvar=self.storage.invTk, row=1)
@@ -216,7 +216,7 @@ class InputForm(tk.Frame):
         box2 = tk.LabelFrame(parent, text="PRIMARY INPUT", fg="blue")
 
         self.add_entry2(self, box2, variable=self.input, key="pP_T2",
-                        text="Primary calculated molecular partial pressure: pP", subscript="T", subsubscript="2",
+                        text="Primary calculated partial pressure: pP", subscript="T", subsubscript="2",
                         units=("[Torr]", "[Pa]"), tvar1=self.storage.pP_T2, tvar2=self.storage.pP_T2_Pa, row=0,
                         conversion=lambda tvar1, variable, key: self.storage.update_pP_T2(tvar1, variable, key))
         box2.grid(row=row, column=column, sticky="nsew")
@@ -239,19 +239,15 @@ class InputForm(tk.Frame):
         box4 = tk.LabelFrame(parent, text="ESTIMATED SECONDARY PRESSURE BY REFERENCE PERMEABILITY DATA", fg="blue")
         self.add_text(box4, text="Estimated time-lag: t", subscript="L",
                       units="[sec]", tvar=self.storage.t_L, row=0)
-        self.add_text(box4, text="Estimated molecular permeability: \u03A6", subscript="",
+        self.add_text(box4, text="Estimated permeability: \u03A6", subscript="",
                       # units="[mol m^-1 s^-1 Pa^-0.5]"
                       units="[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",
-                      tvar=self.storage.Pr_D, row=1)
-        self.add_text2(box4, text="Estimated molecular permeation flux: J", subscript="inf", subsubscript="",
+                      tvar=self.storage.Phi, row=1)
+        self.add_text2(box4, text="Estimated permeation flux: J", subscript="inf", subsubscript="",
                        # units=("[mol m^-2 s^-1]", "[atoms m^-2 s^-1]")
                        units=("[mol m\u207b\u00b2 s\u207b\u00b9]", "[atoms m\u207b\u00b2 s\u207b\u00b9]"),
                        tvar1=self.storage.flux, tvar2=self.storage.flux_atoms, row=2)
-        self.add_text(box4, text="Estimated molecular permeation flux \u00d7 thickness: x",  # times
-                      innersubscript="samp", innertext="J", subscript="inf", subsubscript="",
-                      units="[mol m\u207b\u00b9 s\u207b\u00b9]",  # "[mol m^-1 s^-1]",
-                      tvar=self.storage.x_sampx_flux, row=3)
-        self.add_text(box4, text="Estimated molecular permeation rate: Q", subscript="", subsubscript="",
+        self.add_text(box4, text="Estimated permeation rate: Q", subscript="", subsubscript="",
                       units="[mol s\u207b\u00b9]",  # "[mol s^-1]",
                       tvar=self.storage.Q, row=4)
         self.add_text2(box4, text="Estimated rate of pressure increase: dP/dt", subscript="",
@@ -292,7 +288,7 @@ class InputForm(tk.Frame):
         parent = tk.LabelFrame(self, text="FINAL OUTPUT", fg="blue", bd=10)
         self.add_text(parent, text="Estimated time-lag: t", subscript="L",
                       units="[sec]", tvar=self.storage.t_L, row=0)
-        self.add_text(parent, text="Estimated molecular permeation rate: Q", subscript="", subsubscript="",
+        self.add_text(parent, text="Estimated permeation rate: Q", subscript="", subsubscript="",
                       units="[mol s\u207b\u00b9]",  # "[mol s^-1]",
                       tvar=self.storage.Q, row=1)
         self.add_text(parent, text="Estimated pressure in QMS: P", subscript="", subsubscript="QMS",
@@ -316,7 +312,7 @@ class ORingsAndDefaultVals(tk.Toplevel):
         self.add_entry = widgets.add_entry
 
         self.title("Add or Edit O-Rings / Edit Default Values")
-        self.resizable(width=False, height=False)
+        # self.resizable(width=False, height=False)
         self.minsize(400, 170)
 
         # gui_x/y values determined by running self.updateidletasks() at the end of self.__init__ and then printing size
@@ -503,7 +499,7 @@ class ORingsAndDefaultVals(tk.Toplevel):
                     [self.D_ring.get(), self.d_ring.get(), self.x_ring.get()]
 
                 # overwrite the old source file with the updated dataframe
-                oring_filename = os.path.join('datafiles', 'o-ring_data.xlsx')
+                oring_filename = os.path.join('data_files', 'o-ring_data.xlsx')
                 self.storage.oring_info_4file.to_excel(oring_filename)
 
                 self.orings_changed = True
@@ -536,7 +532,7 @@ class ORingsAndDefaultVals(tk.Toplevel):
                 if self.ring.get() in self.storage.oring_info_4file.index:  # Check that the O-ring's in this dataframe
                     self.storage.oring_info_4file.drop(index=self.ring.get(), inplace=True)
                     # overwrite the old source file with the updated dataframe
-                    oring_filename = os.path.join('datafiles', 'o-ring_data.xlsx')
+                    oring_filename = os.path.join('data_files', 'o-ring_data.xlsx')
                     self.storage.oring_info_4file.to_excel(oring_filename)
 
                 self.orings_changed = True
@@ -579,7 +575,7 @@ class ORingsAndDefaultVals(tk.Toplevel):
                 self.storage.defaults_info.loc[0, "Secondary Side Volume [cc]"] = self.sV.get()
 
                 # overwrite the old source file with the updated dataframe
-                default_entry_vars_filename = os.path.join('datafiles', 'default_entry_vals.xlsx')
+                default_entry_vars_filename = os.path.join('data_files', 'default_entry_vals.xlsx')
                 self.storage.defaults_info.to_excel(default_entry_vars_filename, index=False)
 
                 self.defaults_changed = True

@@ -4,7 +4,7 @@ from tkinter import ttk
 import numpy as np
 import pandas as pd
 import os
-import platform  # allows for Mac vs Windows adaptions
+import platform  # allows for Mac vs. Windows adaptions
 
 
 class Storage:
@@ -16,21 +16,21 @@ class Storage:
 
         # Create dataframes to store values for updating source spreadsheets.
         # First the material_data spreadsheet
-        filename = os.path.join('datafiles', 'material_data.xlsx')
+        filename = os.path.join('data_files', 'material_data.xlsx')
         self.material_data = pd.read_excel(filename, header=[0, 1],
                                            engine="openpyxl")  # openpyxl supports .xlsx but not .xls
         # set up the index using material names
         self.material_data.set_index(('Unnamed: 0_level_0', "Material"), inplace=True)
         self.material_data.rename_axis("Material", axis="index", inplace=True)
         # Next for the melting_tempK file
-        melt_filename = os.path.join('datafiles', 'melting_tempK.xlsx')
+        melt_filename = os.path.join('data_files', 'melting_tempK.xlsx')
         self.melting_tempK = pd.read_excel(melt_filename, engine="openpyxl")
         self.melting_tempK.set_index("Material", inplace=True)
 
         # Read the o-ring data off an Excel sheet into a convenient dataframe.
         # (1/2, 1/4 VCR data comes from https://www.swagelok.com/downloads/webcatalogs/en/ms-01-24.pdf,
         # page 17 Silver Plated Nonretained)
-        self.oring_filename = os.path.join('datafiles', 'o-ring_data.xlsx')
+        self.oring_filename = os.path.join('data_files', 'o-ring_data.xlsx')
         self.oring_info = pd.read_excel(self.oring_filename, header=0, index_col=0)
         self.oring_info_4file = self.oring_info.copy()  # Duplicate used exclusively for saving to the o-ring file
 
@@ -67,7 +67,7 @@ class Storage:
         self.sample_material.trace_add("write", self.update_properties)
 
         # Read the file for some default values
-        self.defaults_filename = os.path.join('datafiles', 'default_entry_vals.xlsx')
+        self.defaults_filename = os.path.join('data_files', 'default_entry_vals.xlsx')
         self.defaults_info = pd.read_excel(self.defaults_filename, header=0)
 
         # Calibrated Leak Rate
@@ -87,19 +87,18 @@ class Storage:
         self.t_accum = tk.DoubleVar(value=1.00)
         self.t_accum2 = tk.DoubleVar()
 
-        # estimated secondary pressure
-        self.t_L = tk.DoubleVar(value=0)
-        self.Pr_D = tk.DoubleVar(value=0)
-        self.flux = tk.DoubleVar(value=0)
-        self.flux_atoms = tk.DoubleVar(value=0)
-        self.x_sampx_flux = tk.DoubleVar(value=0)
-        self.Q = tk.DoubleVar(value=0)
-        self.del_sP = tk.DoubleVar(value=0)
-        self.del_sP_Pa = tk.DoubleVar(value=0)
-        self.sP_final = tk.DoubleVar(value=0)
-        self.sP_final2 = tk.DoubleVar(value=0)
+        # estimated secondary pressure parameters
+        self.t_L = tk.DoubleVar(value=0)  # Estimated time lag
+        self.Phi = tk.DoubleVar(value=0)  # Estimated permeability
+        self.flux = tk.DoubleVar(value=0)  # Estimated molar flux
+        self.flux_atoms = tk.DoubleVar(value=0)  # Estimated  atomic flux
+        self.Q = tk.DoubleVar(value=0)  # Estimated molecular permeation rate
+        self.del_sP = tk.DoubleVar(value=0)  # Estimated rate of pressure increase, Torr/s
+        self.del_sP_Pa = tk.DoubleVar(value=0)  # /\, Pa/s
+        self.sP_final = tk.DoubleVar(value=0)  # Estimated final secondary side pressure, Torr
+        self.sP_final2 = tk.DoubleVar(value=0)  # /\, Pa
         self.Det_CM = tk.StringVar(value="NOPE")  # Check if detectable via capacitance manometer
-        self.p_QMS = tk.DoubleVar(value=0)
+        self.p_QMS = tk.DoubleVar(value=0)  # Estimated pressure in QMS
         self.Det_QMS = tk.StringVar(value="NOPE")  # Check if detectable via QMS
         self.Sat_QMS = tk.StringVar(value="NOPE")  # Check if saturate the QMS
 
@@ -112,6 +111,8 @@ class Storage:
 
         # store the transport properties calculations
         self.TransportParameters = pd.DataFrame()
+        self.PTransportParameters = pd.DataFrame()
+        self.ATransportParameters = pd.DataFrame()
 
     def connect_variables(self):
         """ Set up variables so that functions are triggered if they are changed"""
@@ -137,7 +138,7 @@ class Storage:
             if self.Tk.get() > 1/2 * melt:
                 tk.messagebox.showerror("Melting Caution", "The temperature you entered may result in soft metal." +
                                                            " You entered {:.1f} K.".format(self.Tk.get()) +
-                                                           " Half the melting temp is {:.1f} K or {:.1f} \u2103."
+                                                           " Half the melting temp is {:.1f} K or {:.1f} \u00B0C."
                                                            .format(1/2*melt, 1/2*melt-self.standard_temp))
 
     @staticmethod
@@ -147,10 +148,10 @@ class Storage:
             diffusivity and solubility. Use that information to calculate those respective number for permeability.
             Read in the melting temp if available. Combine this all into a dataframe and return that dataframe """
         # read in diffusivity and solubility data
-        # todo It'd be nice to have the user select a file similar to "SaveFileExample.xlsx" in the datafiles folder
+        # todo It'd be nice to have the user select a file similar to "SaveFileExample.xlsx" in the data_files folder
         #      then if two of the three quantities (diffusivity, solubility, permeability) are present, the third
         #      will be calculated. This can be similar to how it is done in overview_plots.py - EditMaterials class.
-        filename = os.path.join('datafiles', 'material_data.xlsx')
+        filename = os.path.join('data_files', 'material_data.xlsx')
         df = pd.read_excel(filename, header=[0, 1], engine="openpyxl")  # openpyxl supports .xlsx file format, not .xls
         # set up the index using material names
         df.set_index(('Unnamed: 0_level_0', "Material"), inplace=True)
@@ -171,7 +172,7 @@ class Storage:
         df[("Permeability", "max. temp. [K]")] = [min((df[col[3]][i], df[col[7]][i])) for i in range(len(df))]
 
         # read in melting temp data
-        melt_filename = os.path.join('datafiles', 'melting_tempK.xlsx')
+        melt_filename = os.path.join('data_files', 'melting_tempK.xlsx')
         df2 = pd.read_excel(melt_filename, engine="openpyxl")
         df2.set_index("Material", inplace=True)
 
@@ -252,54 +253,33 @@ class Storage:
         """ On any user input, update the values of variables in
             the estimated secondary pressure section.
             Variable names and equations copied from Excel. This method reduced extra calls to the tk variables. """
-        # todo update to make more readable
-        C8 = self.x_samp2.get()
-        C13 = self.D0.get()
-        C14 = self.E_D.get()
-        G8 = self.invTk.get()
-        C40 = self.R
-        C17 = self.P0.get()
-        C18 = self.E_P.get()
-        G12 = self.pP_T2_Pa.get()
-        C36 = self.Na
-        C26 = self.A_perm.get()
-        C39 = self.cc_to_mole
-        G15 = self.sV.get()
-        C37 = self.torr_to_pa
-        G17 = self.t_accum2.get()
-        C29 = self.cal_leak_rate.get()
-
-        self.t_L.set(C8**2/6/(C13*np.exp(-1*C14*G8/C40)/np.sqrt(2)))
-        self.Pr_D.set(C17*np.exp(-1*C18*G8/C40)/np.sqrt(2))
-        G21 = self.Pr_D.get()
-        self.flux.set(G21 * np.sqrt(G12) / C8)
-        G22 = self.flux.get()
-        self.flux_atoms.set(G22 * C36 * 2)
-        self.x_sampx_flux.set(G22 * C8)
-        self.Q.set(G22 * C26)
-        G25 = self.Q.get()
-        self.del_sP.set(G25/C39/G15*760)
-        G26 = self.del_sP.get()
-        self.del_sP_Pa.set(G26*C37)
-        self.sP_final.set(G26*G17)
-        G27 = self.del_sP_Pa.get()
-        self.sP_final2.set(G27*G17)
-        G28 = self.sP_final.get()
+        self.t_L.set(self.x_samp2.get()**2 / 6 / (
+                self.D0.get() * np.exp(-1 * self.E_D.get() * self.invTk.get() / self.R)))  # s, Time-lag
+        self.Phi.set(self.P0.get() *
+                     np.exp(-1 * self.E_P.get() * self.invTk.get() / self.R))  # mol(Q2)/m/s/sqrt(Pa), Molecular permeability
+        self.flux.set(self.Phi.get() *
+                      np.sqrt(self.pP_T2_Pa.get()) / self.x_samp2.get())  # mol(Q2)/s/m^2, Molecular permeation flux
+        self.flux_atoms.set(self.flux.get() * self.Na * 2)  # atoms/s/m^2, Atomic permeation flux
+        self.Q.set(self.flux.get() * self.A_perm.get())  # mol(Q2)/s, Molecular permeation rate
+        self.del_sP.set((self.Q.get() * self.R * (self.standard_temp + 20) / self.sV.get()) *
+                        760)  # Torr/s, rate of pressure increase, assumes room temperature gas
+        self.del_sP_Pa.set(self.del_sP.get() * self.torr_to_pa)  # Pa/s, /\
+        self.sP_final.set(self.del_sP.get() * self.t_accum2.get())  # Torr, final secondary pressure
+        self.sP_final2.set(self.del_sP_Pa.get() * self.t_accum2.get())  # Pa, /\
         # Detectable with capacitance manometer (>1E-4 Torr)
-        if G28 > 0.0001:
+        if self.sP_final.get() > 0.0001:
             self.Det_CM.set("YES")
         else:
             self.Det_CM.set("NO")
 
-        self.p_QMS.set(G25 / C29)
-        G31 = self.p_QMS.get()
+        self.p_QMS.set(self.Q.get() / self.cal_leak_rate.get())
         # Detectable with QMS (>1E-10 Torr)
-        if G31 > 0.0000000001:
+        if self.p_QMS.get() > 0.0000000001:
             self.Det_QMS.set("YES")
         else:
             self.Det_QMS.set("NO")
         # Saturate with QMS  (>1E-6 Torr)
-        if G31 > 0.000001:
+        if self.p_QMS.get() > 0.000001:
             self.Sat_QMS.set("SATURATE")
         else:
             self.Sat_QMS.set("OK")

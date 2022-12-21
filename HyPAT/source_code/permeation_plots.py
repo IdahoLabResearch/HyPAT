@@ -14,7 +14,7 @@ from .data_storage import Widgets, LoadingScreen
 from scipy.optimize import curve_fit
 import mplcursors  # adds the hover-over feature to labels. This library has good documentation
 import openpyxl
-import platform  # allows for Mac vs Windows adaptions
+import platform  # allows for Mac vs. Windows adaptions
 # make certain warnings appear as errors, allowing them to be caught using a try/except clause
 import warnings
 from scipy.optimize import OptimizeWarning
@@ -89,8 +89,8 @@ class PermeationPlots(tk.Frame):
         self.volume = tk.DoubleVar(value=(self.storage.defaults_info["Secondary Side Volume [cc]"][0]) * 10 ** -6)
         self.ss_tol = tk.DoubleVar(value=self.storage.tol.get())  # Tolerance for finding the steady state
         self.ss_t_del = tk.DoubleVar(value=self.storage.t_del.get())  # Minimum time after t0 before looking for ss
-        self.leak_range = {}  # Dict for holding the range used in finding leaks and initial variables for each file
-        self.ss_range = {}  # Dict for holding the range used in finding ss and ss variables for each file
+        self.leak_range = {}  # Dict for holding the range used in finding leaks and initial values for each file
+        self.ss_range = {}  # Dict for holding the range used in finding ss and ss values for each file
         self.gen_leak_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to determine leak over
         self.gen_ss_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to determine ss over
         # default area is the inner area of the default O-ring
@@ -120,7 +120,7 @@ class PermeationPlots(tk.Frame):
         self.Tg0 = {}  # Temperature of gas at t0 (using an average over time and instruments) (K)
         self.Tgss = {}  # Temperature of gas at tss (using an average over time and instruments) (K)
         self.Tgss_err = {}
-        self.artists = []  # store points for Perm/Dif/Sol vs Temp graph
+        self.artists = []  # store points for Perm/Dif/Sol vs. Temp graph
         self.Tsamp0 = {}  # Sample temperature at t0 (using an average over time and instruments) (K)
         self.Tsampss = {}  # Sample temperature at tss (using an average over time and instruments) (K)
         self.Tsampss_err = {}
@@ -132,11 +132,13 @@ class PermeationPlots(tk.Frame):
         # diffusivity variables
         self.intercept = {}
         self.tlag = {}
-        self.D = {}
+        self.D = {}  # diffusivity
         self.D_err = {}
+        self.A = {}  # proportionality constant
+        self.dt = {}  # additive time constant
         self.D_time = {}  # time over which D is calculated
         self.lhs = {}  # for the diffusivity optimization comparison
-        self.rhs = {}
+        self.rhs = {}  # time-lag method
         self.rhs_cf = {}  # curve_fit
 
         # solubility variables
@@ -198,11 +200,11 @@ class PermeationPlots(tk.Frame):
         b2 = ttk.Button(self.frame, text='Close popout plots', command=lambda: plt.close('all'))
         b2.grid(row=button_row + 1, column=1, sticky="ew")
 
-        b3 = ttk.Button(self.frame, text='Export to Excel', command=self.export_data)
-        b3.grid(row=button_row + 1, column=3, sticky="ew")
+        self.coord_b = ttk.Button(self.frame, text="Enable Coordinates", command=self.toggle_coordinates)
+        self.coord_b.grid(row=button_row + 1, column=3, sticky="ew")
 
-        b4 = ttk.Button(self.frame, text='Save current figures', command=self.save_figures)
-        b4.grid(row=button_row + 1, column=4, sticky="w")
+        b3 = ttk.Button(self.frame, text='Save current figures', command=self.save_figures)
+        b3.grid(row=button_row + 1, column=4, sticky="w")
 
         menu_row = button_row + 2
         self.add_text0(self.frame, text="Current File:", subscript="", row=menu_row)
@@ -217,12 +219,18 @@ class PermeationPlots(tk.Frame):
         self.add_text0(self.frame, text="Current Measurement:", subscript="", row=menu_row + 1)
         self.PDK_menu = tk.OptionMenu(self.frame, self.current_variable, 'Permeability', 'Diffusivity',
                                       'Solubility', 'Flux')
-        self.PDK_menu.grid(row=menu_row + 1, column=1, columnspan=4, sticky='ew')
+        self.PDK_menu.grid(row=menu_row + 1, column=1, columnspan=3, sticky='ew')
         self.current_variable.trace_add("write", self.update_PDK_plot)
 
+        b4 = ttk.Button(self.frame, text='Export to Excel', command=self.export_data)
+        b4.grid(row=menu_row + 1, column=4, sticky="ew")
+
+        # Store the "set_message" functions
+        self.message_function = {}
+
         # create bottom left plot
-        self.ax_title = "Permeability vs Temperature"
-        self.ax_xlabel = "Temperature (\u2103)"
+        self.ax_title = "Permeability vs. Temperature"
+        self.ax_xlabel = " Temperature (\u00B0C) "  # Space at the beginning and end is b/c on Mac, T & e are too close
         self.ax_ylabel = "Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
         self.fig, self.ax, self.canvas, self.toolbar = self.add_plot(self.bottom_frame,
                                                                      xlabel=self.ax_xlabel,
@@ -230,7 +238,7 @@ class PermeationPlots(tk.Frame):
                                                                      title=self.ax_title,
                                                                      row=0, column=0, axes=[.3, .15, .65, .75])
         # create top right plot
-        self.ax1_title = "Pressure vs Time"
+        self.ax1_title = "Pressure vs. Time"
         self.ax1_xlabel = "Time (s)"
         self.ax1_ylabel = "Secondary Pressure (Pa)"
         self.ax12_ylabel = "Primary Pressure (Pa)"
@@ -244,14 +252,14 @@ class PermeationPlots(tk.Frame):
         # The top right plot would flicker every time the order of magnitude of the cursor's location would change, so
         # the following line changes the format of the displayed x & y coordinates. The specific format chosen was the
         # result of trial and error in conjunction with editing the text of the entry boxes for ss_tol and ss_t_del
-        # (which are now accessed by a button)
-        self.ax12.format_coord = lambda x, y: "({:3g}, ".format(y) + "{:3g})".format(x)
+        # (which are now accessed by a button). This is kept in case coordinates are changed to on by default again.
+        self.ax12.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
 
         # Create bottom middle plot
-        self.ax2_title = "Permeability vs Time"
+        self.ax2_title = "Permeability vs. Time"
         self.ax2_xlabel = "Time (s)"
         self.ax2_ylabel = r"Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
-        self.ax22_ylabel = "Sample Temperature (\u2103)"
+        self.ax22_ylabel = "Sample Temperature (\u00B0C)"
         self.fig2, self.ax2, self.canvas2, self.toolbar2 = self.add_plot(self.bottom_frame,
                                                                          xlabel=self.ax2_xlabel,
                                                                          ylabel=self.ax2_ylabel,
@@ -263,16 +271,61 @@ class PermeationPlots(tk.Frame):
         # Create bottom right plot
         self.ax3_title = "Diffusivity Optimization Comparison"
         self.ax3_xlabel = "Time (s)"
-        self.ax3_ylabel = r"(J$_t$ - J$_0$)/(J$_{inf}$ - J$_0$)"
+        self.ax3_ylabel = r"$(~J_{\mathrm{t}} - J_{\mathrm{0}}~)~/~(~J_{\mathrm{inf}} - J_{\mathrm{0}}~)$"
         self.fig3, self.ax3, self.canvas3, self.toolbar3 = self.add_plot(self.bottom_frame,
                                                                          xlabel=self.ax3_xlabel,
                                                                          ylabel=self.ax3_ylabel,
                                                                          title=self.ax3_title,
                                                                          row=0, column=2, axes=[.15, .15, .75, .75])
 
-        # Counteracts a bug of constrained_layout=True which causes four plots to be generated but not shown until a
+        # Turn off coordinates to avoid layout="constrained" causing the plots to shift constantly
+        self.ax.format_coord = lambda x, y: ''
+        self.ax1.format_coord = lambda x, y: ''
+        self.ax12.format_coord = lambda x, y: ''
+        self.ax2.format_coord = lambda x, y: ''
+        self.ax22.format_coord = lambda x, y: ''
+        self.ax3.format_coord = lambda x, y: ''
+
+        # Counteracts a bug of layout="constrained" which causes four plots to be generated but not shown until a
         # Popout Plot button is clicked
         plt.close("all")
+
+    def toggle_coordinates(self):
+        """ Toggles between being able to see coordinates while hovering over plots """
+        if self.coord_b.config('text')[-1] == 'Enable Coordinates':
+            # Turn on coordinates
+            self.ax.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.ax1.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.ax12.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.ax2.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.ax22.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            self.ax3.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
+            # Turn on status bar
+            self.toolbar.set_message = self.message_function[self.ax]
+            self.toolbar1.set_message = self.message_function[self.ax1]
+            self.toolbar2.set_message = self.message_function[self.ax2]
+            self.toolbar3.set_message = self.message_function[self.ax3]
+            self.coord_b.config(text='Disable Coordinates')  # Toggle the text so next time, it goes to the "else" part
+        else:
+            # Turn off coordinates
+            self.ax.format_coord = lambda x, y: ''
+            self.ax1.format_coord = lambda x, y: ''
+            self.ax12.format_coord = lambda x, y: ''
+            self.ax2.format_coord = lambda x, y: ''
+            self.ax22.format_coord = lambda x, y: ''
+            self.ax3.format_coord = lambda x, y: ''
+            # Turn off status bar
+            self.toolbar.set_message("")
+            self.toolbar1.set_message("")
+            self.toolbar2.set_message("")
+            self.toolbar3.set_message("")
+            self.toolbar.set_message = lambda s: ""
+            self.toolbar1.set_message = lambda s: ""
+            self.toolbar2.set_message = lambda s: ""
+            self.toolbar3.set_message = lambda s: ""
+            self.coord_b.config(text='Enable Coordinates')  # Toggle the text so next time, it goes to the "if" part
+        self.canvas.draw()
+        self.toolbar.update()
 
     def update_function(self, tvar, var_type, key):
         """ Checks if the user entry is a number (float or int). If not, revert the entered string to its prior state.
@@ -302,7 +355,7 @@ class PermeationPlots(tk.Frame):
 
     def add_plot(self, parent, xlabel='', ylabel='', title='', row=0, column=0, rowspan=1, axes=[.1, .15, .8, .75]):
         """ Create a plot according to variables passed in (parent frame, x-label, y-label, title, row, and column).
-            axes are kept in case constrained_layout has problems. """
+            axes are kept in case layout="constrained" has problems. """
         # location of main plot
         frame = tk.Frame(parent)
         frame.grid(row=row, column=column, rowspan=rowspan, sticky="nsew")
@@ -311,11 +364,11 @@ class PermeationPlots(tk.Frame):
         The above website says the following as of 10/16/2021: 
         "Currently Constrained Layout is experimental. The behaviour and API are subject to change, 
         or the whole functionality may be removed without a deprecation period..."
+        As of 9/6/22, according to https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html there
+        was an update. This source says to use layout="constrained": https://matplotlib.org/stable/api/figure_api.html
         """
-        # todo Update this to the official layout feature. See:
-        #      https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html
-        fig, ax = matplotlib.pyplot.subplots(constrained_layout=True)
-        # If something goes wrong with constrained_layout, comment out the above line and uncomment the two lines below
+        fig, ax = matplotlib.pyplot.subplots(layout="constrained")
+        # If something's wrong with layout="constrained", comment out the above line and uncomment the two lines below
         # fig = Figure()
         # ax = fig.add_axes(axes)  # [left, bottom, width, height]
 
@@ -334,11 +387,15 @@ class PermeationPlots(tk.Frame):
         b.pack(side="left", padx=1)
 
         # Add a button that allows user input of various steady state variables
-        if title == 'Pressure vs Time':
+        if title == 'Pressure vs. Time':
             entry_frame = tk.Frame(toolbar)
             entry_frame.pack(side="left", padx=1)
             b = tk.Button(entry_frame, text='Steady State Variables', command=self.adjust_ss_vars)
             b.grid(row=0, column=4, sticky="w")
+
+        # Store and turn off the capability to update the status bar
+        self.message_function[ax] = toolbar.set_message
+        toolbar.set_message = lambda s: ""
 
         toolbar.update()
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -455,7 +512,7 @@ class PermeationPlots(tk.Frame):
                             self.calculate_solubility(filename, self.datafiles[filename])
                     except Exception as e:
                         # If you want to see the traceback as part of the error text, change the below value to true
-                        want_traceback = False
+                        want_traceback = True
                         if want_traceback:
                             import traceback
                             full_traceback = "\n" + traceback.format_exc()
@@ -550,7 +607,7 @@ class PermeationPlots(tk.Frame):
         # this will recreate the dataframe each time
         df = pd.DataFrame()
         for filename in self.options:
-            df = df.append(pd.DataFrame(
+            df = pd.concat([df, pd.DataFrame(
                 {"Gas Temperature [K]": self.Tgss[filename],
                  "Gas Temperature Uncertainty [K]": self.Tgss_err[filename],
                  "Sample Temperature [K]": self.Tsampss[filename],
@@ -565,9 +622,12 @@ class PermeationPlots(tk.Frame):
                  "Diffusivity Uncertainty [m^2 s^-1]": self.D_err[filename],
                  "Solubility [mol m^-3 Pa^-0.5]": self.Ks[filename],
                  "Solubility Uncertainty [mol m^-3 Pa^-0.5]": self.Ks_err[filename],
+                 "Proportionality Constant A": self.A[filename],
+                 "Additive Time Constant dt [s]": self.dt[filename]
                  }, index=[filename]
-            ))
+                )])
         self.storage.TransportParameters = df
+        self.storage.PTransportParameters = df
 
     def export_data(self):
         """ Loads dataframe containing the information for each material into an Excel sheet """
@@ -583,7 +643,7 @@ class PermeationPlots(tk.Frame):
             save_filename = asksaveasfilename(initialdir=os.path.dirname(__file__), initialfile="test",
                                               defaultextension="*.xlsx")
             if save_filename != '':
-                self.storage.TransportParameters.to_excel(save_filename)
+                self.storage.PTransportParameters.to_excel(save_filename)
 
         else:
             showerror(message='Please load data first.')
@@ -658,9 +718,9 @@ class PermeationPlots(tk.Frame):
 
     def get_persistent_vars(self):
         """ Read data from persistent_permeation_input_variables.xlsx. This data is critical to processing the
-            datafiles loaded in by the user. """
+            data files loaded in by the user. """
         # Open up the persistent variable file for reading
-        pv_filename = os.path.join('datafiles', 'persistent_permeation_input_variables.xlsx')
+        pv_filename = os.path.join('data_files', 'persistent_permeation_input_variables.xlsx')
         pv_wb = openpyxl.load_workbook(pv_filename)
 
         self.num_GasT = pv_wb['Numbers']['C2'].value  # Number of TCs measuring GasT
@@ -753,7 +813,7 @@ class PermeationPlots(tk.Frame):
                 # This is faster for large files, but isn't working on .xlsx file formats
                 Data = pd.read_csv(filename, sep='\t', header=None, usecols=self.needed_cols,
                                    converters=self.converters_dict, skiprows=self.starting_row,
-                                   skipfooter=self.footer_rows)
+                                   skipfooter=self.footer_rows, engine='python')
             else:  # assume .xlsx file
                 # openpyxl supports .xlsx Excel file formats. According to documentation, engine=None should
                 # support xlsx and xls, but it doesn't seem to work for xls as of 11/10/2021
@@ -803,7 +863,7 @@ class PermeationPlots(tk.Frame):
             if self.file_type == ".xls":
                 Data = pd.read_csv(filename, sep='\t', header=None, usecols=self.needed_cols,
                                    converters=self.converters_dict, skiprows=self.starting_row,
-                                   skipfooter=self.footer_rows)
+                                   skipfooter=self.footer_rows, engine='python')
             else:  # assume .xlsx file
                 Data = pd.read_excel(filename, header=None, engine="openpyxl", usecols=self.needed_cols,
                                      converters=self.converters_dict, skiprows=self.starting_row,
@@ -1129,7 +1189,7 @@ class PermeationPlots(tk.Frame):
         self.SecP_err[filename] = SecP_err
         self.PrimP_err[filename] = PrimP_err
 
-        # Data for permeability vs time graph
+        # Data for permeability vs. time graph
         self.Perm_Plot[filename] = ((dSecP - self.pleak_lf[filename]["slope"]) * self.volume.get() * sl) / \
                                    (((data['PrimP']) ** 0.5 - (
                                                         data['SecP']) ** 0.5) * R * (
@@ -1176,7 +1236,7 @@ class PermeationPlots(tk.Frame):
             (R * (self.Tg_mean.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename]].to_numpy() +
                   self.storage.standard_temp) * self.A_perm.get())
         self.D_time[filename] = data.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename], 't'] - \
-            data.loc[self.t0[filename] + 1, 't']
+            data.loc[self.t0[filename], 't']
         J0 = np.mean(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 'dSecP']) * \
             self.volume.get() / (R * self.Tg0[filename] * self.A_perm.get())  # leak rate
         Jinf = np.mean(data.loc[self.tss[filename] + 1:
@@ -1217,13 +1277,13 @@ class PermeationPlots(tk.Frame):
             # Function for optimizing D using curve fit
             rhs = 1 + 2 * sum(
                 [(-1) ** n * np.exp(-D_opt * n ** 2 * np.pi ** 2 * (xdata + dt_opt) / sl ** 2) for n in range(1, 20)])
-            return rhs / A_opt
-
+            return rhs * A_opt
         # Attempt to optimize D using curve fit and the above function. Show a warning if it fails due to RuntimeError
         try:
             if not skipD:  # If not skipping the calculation of D
+                # todo look into making this a weighted curve fit
                 popt, pcov = curve_fit(f, self.D_time[filename], self.lhs[filename], p0=[D, 0, 1], xtol=D * 1e-3,
-                                       bounds=([0, 0, -1000], [10, 10*h, 1000]))
+                                       bounds=([0, -min(self.D_time[filename]), -1000], [10, 10*h, 1000]))
             else:
                 NaN = float("NaN")
                 popt = [NaN, NaN, NaN]
@@ -1243,12 +1303,11 @@ class PermeationPlots(tk.Frame):
             pcov = np.array([[NaN, NaN, NaN], [NaN, NaN, NaN], [NaN, NaN, NaN]])
         perr = np.sqrt(np.diag(pcov))
         self.D_err[filename] = perr[0]
-
-        # Store D and rhs_cf for use elsewhere in program
-        self.D[filename], dt, A = popt
-        self.rhs_cf[filename] = 1 + 2 * sum(
-            [(-1) ** n * np.exp(-self.D[filename] * n ** 2 * np.pi ** 2 * (self.D_time[filename] + dt) / sl ** 2)
-             for n in range(1, 20)])
+        # Store D, dt, A, and rhs_cf for use elsewhere in program
+        self.D[filename], self.dt[filename], self.A[filename] = popt
+        self.rhs_cf[filename] = self.A[filename] * (1 + 2 * sum(
+            [(-1) ** n * np.exp(-self.D[filename] * n ** 2 * np.pi ** 2 * (self.D_time[filename] + self.dt[filename]) /
+                                sl ** 2) for n in range(1, 20)]))
         if debug:
             lhs = A * (Jt - J0) / (Jinf - J0)
             plt.figure()
@@ -1286,13 +1345,13 @@ class PermeationPlots(tk.Frame):
         self.ax22.clear()
         self.ax3.clear()
 
-        # Permeability/Diffusivity/Solubility vs Temperature and Flux vs Pressure (bottom left graph)
+        # Permeability/Diffusivity/Solubility vs. Temperature and Flux vs. Pressure (bottom left graph)
         self.PDK_plot(self.ax)
 
-        # Pressure vs Time (top right graph)
+        # Pressure vs. Time (top right graph)
         self.pressure_time_plot(data, filename, self.fig1, self.ax1, self.ax12)
 
-        # Permeation vs Time (bottom middle graph)
+        # Permeation vs. Time (bottom middle graph)
         self.perm_time_plot(data, filename, self.fig2, self.ax2, self.ax22)
 
         # Diffusivity comparison plots for optimization (bottom right graph)
@@ -1346,24 +1405,24 @@ class PermeationPlots(tk.Frame):
             # Do things depending on which plot is going to be the popout plot
             if plot == self.ax_title:
                 # PDK plot
-                fig, axis = plt.subplots()
+                fig, axis = plt.subplots(layout="constrained")
                 self.PDK_plot(axis)
 
             elif plot == self.ax1_title:
-                # Pressure vs Time
-                fig, ax1 = plt.subplots()
+                # Pressure vs. Time
+                fig, ax1 = plt.subplots(layout="constrained")
                 ax12 = ax1.twinx()
                 self.pressure_time_plot(data, filename, fig, ax1, ax12)
 
             elif plot == self.ax2_title:
-                # Permeation vs Time
-                fig, ax2 = plt.subplots()
+                # Permeation vs. Time
+                fig, ax2 = plt.subplots(layout="constrained")
                 ax22 = ax2.twinx()
                 self.perm_time_plot(data, filename, fig, ax2, ax22)
 
             elif plot == self.ax3_title:
                 # diffusivity comparison plots for optimization
-                fig, ax3 = plt.subplots()
+                fig, ax3 = plt.subplots(layout="constrained")
                 self.comparison_plot(filename, ax3)
 
         else:
@@ -1371,7 +1430,7 @@ class PermeationPlots(tk.Frame):
         plt.show()
 
     def pressure_time_plot(self, data, filename, fig1, ax1, ax12):
-        """ Creates the pressure vs time (top right) plot """
+        """ Creates the pressure vs. time (top right) plot """
         # Plot the point where the isolation valve opens and where steady state is determined
         ax1.plot(data.loc[self.t0[filename], 't'], data.loc[self.t0[filename], 'SecP'], 'yo', label="t$_0$")
         ax1.plot(data.loc[self.tss[filename], 't'], data.loc[self.tss[filename], 'SecP'], 'mo', label="t$_{ss}$")
@@ -1420,7 +1479,7 @@ class PermeationPlots(tk.Frame):
                     bbox_transform=ax1.transAxes, framealpha=0.5)
 
     def perm_time_plot(self, data, filename, fig2, ax2, ax22):
-        """ Creates the permeability vs time (bottom middle) plot """
+        """ Creates the permeability vs. time (bottom middle) plot """
         # Plot the permeability over time
         ax2.plot(data.loc[self.t0[filename]:, 't'], self.Perm_Plot[filename].iloc[self.t0[filename]:],
                  label="RT Perm")
@@ -1428,7 +1487,7 @@ class PermeationPlots(tk.Frame):
         ax2.set_xlabel(self.ax2_xlabel)
         ax2.set_ylabel(self.ax2_ylabel)
 
-        # Plot temperature vs time and set relevant axes
+        # Plot temperature vs. time and set relevant axes
         ax22.plot(data.loc[self.t0[filename]:, 't'], data.loc[self.t0[filename]:, 'SampT'], color='orange',
                   label='Sample T')
         ax22.set_ylabel(self.ax22_ylabel)
@@ -1474,12 +1533,12 @@ class PermeationPlots(tk.Frame):
 
         # Set plot title
         if plot == "Flux":
-            self.ax_title = plot + " vs Pressure"
+            self.ax_title = plot + " vs. Pressure"
             self.ax.loglog()
         else:
-            self.ax_title = plot + " vs Temperature"
+            self.ax_title = plot + " vs. Temperature"
 
-        # store as a local variable to allow for a different xlabel in the flux vs pressure plot
+        # store as a local variable to allow for a different xlabel in the flux vs. pressure plot
         xlabel = self.ax_xlabel
 
         # set y labels to get units right
@@ -1501,17 +1560,17 @@ class PermeationPlots(tk.Frame):
                 y = self.Phi[filename]
                 yerr = self.Phi_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' mol m$^{-1}\,$s$^{-1}\,$Pa$^{-0.5}$' + \
-                        f'\nTemperature={x:.3e} \u2103\nPressure={p:.3e} Pa'
+                        f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
             elif plot == "Diffusivity":
                 y = self.D[filename]
                 yerr = self.D_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' m$^{2}\,$s$^{-1}$' + \
-                        f'\nTemperature={x:.3e} \u2103\nPressure={p:.3e} Pa'
+                        f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
             elif plot == "Solubility":
                 y = self.Ks[filename]
                 yerr = self.Ks_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' mol m$^{-3}\,$Pa$^{-0.5}$' + \
-                        f'\nTemperature={x:.3e} \u2103\nPressure={p:.3e} Pa'
+                        f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
             elif plot == "Flux":
                 y = self.F[filename]
                 yerr = self.F_err[filename]
@@ -1585,7 +1644,7 @@ class AdjustPVars(tk.Toplevel):
         self.add_entry = widgets.add_entry
 
         self.title("Adjust Persistent Variables")
-        self.resizable(width=False, height=False)
+        # self.resizable(width=False, height=False)
         self.minsize(400, 200)
 
         # gui_x/y values determined by running self.updateidletasks() at the end of self.__init__ and then printing size
@@ -1610,7 +1669,7 @@ class AdjustPVars(tk.Toplevel):
         self.changed = False  # Boolean of whether edits have been made that require plot refreshing
 
         # Get the path for the persistent variable file
-        self.pv_filename = os.path.join('datafiles', 'persistent_permeation_input_variables.xlsx')
+        self.pv_filename = os.path.join('data_files', 'persistent_permeation_input_variables.xlsx')
 
         # Read the Excel sheets into dataframes for easier access
         self.numbers_info = pd.read_excel(self.pv_filename, sheet_name="Numbers", header=0)
@@ -1880,7 +1939,7 @@ class AdjustPVars(tk.Toplevel):
         # Add entries for arbitrarily many instruments measuring GasT
         for GasT_inst in self.GasT_info.keys():
             entry_col += 3
-            tk.Label(parent, text="{} [\u2103]".format(GasT_inst)).grid(row=row2entries, column=entry_col + 1)
+            tk.Label(parent, text="{} [\u00B0C]".format(GasT_inst)).grid(row=row2entries, column=entry_col + 1)
             self.add_entry(self, parent, variable=self.inputs, key="col_{}".format(GasT_inst), text="col",
                            innersubscript="{}".format(GasT_inst), innertext=":",
                            subscript="", tvar=self.col_GasT[GasT_inst], units="", ent_w=entry_w,
@@ -1888,19 +1947,19 @@ class AdjustPVars(tk.Toplevel):
                            command=lambda tvar, variable, key: self.check_col_names(tvar, variable, key))
             self.add_entry(self, parent, variable=self.inputs, key="m_{}".format(GasT_inst), text="m",
                            innersubscript="{}".format(GasT_inst), innertext=":",
-                           subscript="", tvar=self.m_GasT[GasT_inst], units="[\u2103/?]", ent_w=entry_w,
+                           subscript="", tvar=self.m_GasT[GasT_inst], units="[\u00B0C/?]", ent_w=entry_w,
                            row=row2entries + 2, column=entry_col, in_window=True,
                            command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                                  parent_frame=pf))
             self.add_entry(self, parent, variable=self.inputs, key="b_{}".format(GasT_inst), text="b",
                            innersubscript="{}".format(GasT_inst), innertext=":",
-                           subscript="", tvar=self.b_GasT[GasT_inst], units="[\u2103]", ent_w=entry_w,
+                           subscript="", tvar=self.b_GasT[GasT_inst], units="[\u00B0C]", ent_w=entry_w,
                            row=row2entries + 3, column=entry_col, in_window=True,
                            command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                                  parent_frame=pf))
             self.add_entry(self, parent, variable=self.inputs, key="cerr_{}".format(GasT_inst), text="cerr",
                            innersubscript="{}".format(GasT_inst), innertext=":",
-                           subscript="", tvar=self.cerr_GasT[GasT_inst], units="[\u2103]", ent_w=entry_w,
+                           subscript="", tvar=self.cerr_GasT[GasT_inst], units="[\u00B0C]", ent_w=entry_w,
                            row=row2entries + 4, column=entry_col, in_window=True,
                            command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                                  parent_frame=pf))
@@ -1913,23 +1972,23 @@ class AdjustPVars(tk.Toplevel):
 
         # Sample temperature
         entry_col += 3
-        tk.Label(parent, text="SampT [\u2103]").grid(row=row2entries, column=entry_col + 1)
+        tk.Label(parent, text="SampT [\u00B0C]").grid(row=row2entries, column=entry_col + 1)
         self.add_entry(self, parent, variable=self.inputs, key="col_SampT", text="col", innersubscript="SampT",
                        innertext=":", subscript="", tvar=self.col_SampT, units="", ent_w=entry_w,
                        row=row2entries + 1, column=entry_col,
                        command=lambda tvar, variable, key: self.check_col_names(tvar, variable, key))
         self.add_entry(self, parent, variable=self.inputs, key="m_SampT", text="m", innersubscript="SampT",
-                       innertext=":", subscript="", tvar=self.m_SampT, units="[\u2103/?]", ent_w=entry_w,
+                       innertext=":", subscript="", tvar=self.m_SampT, units="[\u00B0C/?]", ent_w=entry_w,
                        row=row2entries + 2, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
         self.add_entry(self, parent, variable=self.inputs, key="b_SampT", text="b", innersubscript="SampT",
-                       innertext=":", subscript="", tvar=self.b_SampT, units="[\u2103]", ent_w=entry_w,
+                       innertext=":", subscript="", tvar=self.b_SampT, units="[\u00B0C]", ent_w=entry_w,
                        row=row2entries + 3, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
         self.add_entry(self, parent, variable=self.inputs, key="cerr_SampT", text="cerr", innersubscript="SampT",
-                       innertext=":", subscript="", tvar=self.cerr_SampT, units="[\u2103]", ent_w=entry_w,
+                       innertext=":", subscript="", tvar=self.cerr_SampT, units="[\u00B0C]", ent_w=entry_w,
                        row=row2entries + 4, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
@@ -2112,7 +2171,7 @@ class PPSettingsHelp(tk.Toplevel):
         super().__init__(*args, **kwargs)
 
         self.title("Help for Permeation's Persistent Variables Settings")
-        self.resizable(width=False, height=False)
+        # self.resizable(width=False, height=False)
         self.minsize(400, 200)
 
         if platform.system() == 'Darwin':
@@ -2140,7 +2199,7 @@ class PPSettingsHelp(tk.Toplevel):
         td = {}
         tdt = {}
         for item in (" ", "t [s]: ", "PrimP [Pa]: ", "SecP [Pa]: ", "Isolation Valve [1/0]: ", "Starting Row: ",
-                     "Rows in Footer: ", "GasT [\u2103]: ", "SampT [\u2103]: ", "col: ", "m: ", "b: ", "cerr: ",
+                     "Rows in Footer: ", "GasT [\u00B0C]: ", "SampT [\u00B0C]: ", "col: ", "m: ", "b: ", "cerr: ",
                      "perr: "):
             td[item] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
             tdt[item + "text"] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
@@ -2167,22 +2226,22 @@ class PPSettingsHelp(tk.Toplevel):
                                                    "sheet (0-indexed). HyPAT assumes the data file has no header, so " +
                                                    "use this to start analysis after the header.")
         tdt["Rows in Footer: text"].insert("insert", "How many rows at the bottom of the file to ignore.")
-        tdt["GasT [\u2103]: text"].insert("insert", "The thermocouples (TCs) that measure the gas's temperature. " +
+        tdt["GasT [\u00B0C]: text"].insert("insert", "The thermocouples (TCs) that measure the gas's temperature. " +
                                                     "The number of TCs can be set arbitrarily via " +
                                                     "'Number of TCs measuring GasT.'")
-        tdt["SampT [\u2103]: text"].insert("insert", "The thermocouple that measures the sample temperature.")
-        tdt["col: text"].insert("insert", "Reference column for corresponding variable in raw data file.")
+        tdt["SampT [\u00B0C]: text"].insert("insert", "The thermocouple that measures the sample temperature.")
+        tdt["col: text"].insert("insert", "Reference column for corresponding quantity in raw data file.")
         tdt["m: text"].insert("insert", "Every entry in the column of data is converted according to m*x + b, " +
                                         "where x is the entry in the column. Use this to convert the column's data " +
                                         "to SI units.")
         tdt["b: text"].insert("insert", "See entry for 'm' above.")
-        tdt["cerr: text"].insert("insert", "Constant uncertainty of the instrument, e.g., +/- 2\u2103. " +
+        tdt["cerr: text"].insert("insert", "Constant uncertainty of the instrument, e.g., +/- 2\u00B0C. " +
                                            "When calculating the uncertainty caused by each instrument, the " +
                                            "application chooses the largest out of the constant uncertainty, the " +
                                            "proportional uncertainty (see below), and the calculated statistical " +
                                            "uncertainty.")
         tdt["perr: text"].insert("insert", "Proportional uncertainty of the instrument, e.g., " +
-                                           "+/- 0.75% of the measurement (in \u2103).")
+                                           "+/- 0.75% of the measurement (in \u00B0C).")
 
         # Configure each text widget
         for i, symbol in enumerate(td):

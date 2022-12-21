@@ -157,7 +157,7 @@ class Plots(tk.Frame):
         self.toolbar.update()
 
     def toggle_multiple_labels(self):
-        """ Toggles between being able to see labels while hovering over lines vs being able to see many labels
+        """ Toggles between being able to see labels while hovering over lines vs. being able to see many labels
             by clicking on the lines """
         if self.b2.config('text')[-1] == 'Enable Multiple Labels':
             mplcursors.Cursor.remove(self.cursor)  # Removes the possibility of double labels
@@ -193,6 +193,7 @@ class Plots(tk.Frame):
         # Read in variables
         try:
             T = data["Sample Temperature [K]"]
+            T_unc = data["Sample Temperature Uncertainty [K]"]
             P_var = data["Permeability [mol m^-1 s^-1 Pa^-0.5]"]
             P_unc = data["Permeability Uncertainty [mol m^-1 s^-1 Pa^-0.5]"]
             D_var = data["Diffusivity [m^2 s^-1]"]
@@ -206,6 +207,10 @@ class Plots(tk.Frame):
                                             ' by the "Export to Excel" button in the "Permeation Plots" tab or'
                                             ' in the "Absorption Plots" tab.')
             return
+
+        # Min and max temperatures, degrees Celsius
+        Tmin, Tmax = round(min(T) - self.storage.standard_temp, 12), round(max(T) - self.storage.standard_temp, 12)
+        Tmin_unc, Tmax_unc = T_unc[T.argmin()], T_unc[T.argmax()]  # Uncertainties in min and max temps
 
         # The Arrhenius function
         def f(temp, energy, variable):
@@ -250,7 +255,8 @@ class Plots(tk.Frame):
                     "Pre-exponential factor for permeability: {:.2e} +/- {:.2e}".format(P_fit[1], P_uncert[1]) + \
                     " [mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]\n" + \
                     "Activation energy for permeability: {:.2e} +/- {:.2e}".format(P_fit[0], P_uncert[0]) + \
-                    " [kJ mol\u207b\u00b9]"
+                    " [kJ mol\u207b\u00b9]\n\n" + \
+                    "Temperature Range: {} [\u00B0C] to {}".format(round(Tmin), round(Tmax)) + " [\u00B0C]"
 
         # Create a textbox with the text in it
         from tkinter import font
@@ -259,7 +265,7 @@ class Plots(tk.Frame):
         else:
             twidth = 75
         fittext = tk.Text(popup, font=font.nametofont("TkDefaultFont"), background=self.mats_frame.cget("background"),
-                          padx=10, pady=10, spacing2=10, width=twidth, height=11)
+                          padx=10, pady=10, spacing2=10, width=twidth, height=13)
         fittext.insert("insert", fit_texts)
         fittext.configure(state="disabled")  # Turn off editing the text
         fittext.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
@@ -271,24 +277,28 @@ class Plots(tk.Frame):
                        command=lambda loading=True: self.fit_to_Arrhenius_eqn(loading))
         b1.grid(row=0, column=0)
         b2 = tk.Button(master=Arrhenius_button_frame, text="Save to Excel",
-                       command=lambda pf=P_fit, pu=P_uncert, df=D_fit, du=D_uncert, sf=S_fit, su=S_uncert:
-                       self.save_Arrhenius_to_excel(pf, pu, df, du, sf, su))
+                       command=lambda pf=P_fit, pu=P_uncert, df=D_fit, du=D_uncert, sf=S_fit, su=S_uncert,
+                                      tmin=Tmin, tmax=Tmax, tminu=Tmin_unc, tmaxu=Tmax_unc:
+                       self.save_Arrhenius_to_excel(pf, pu, df, du, sf, su, tmin, tmax, tminu, tmaxu))
         b2.grid(row=0, column=1)
 
-    def save_Arrhenius_to_excel(self, P_fit, P_uncert, D_fit, D_uncert, S_fit, S_uncert):
+    def save_Arrhenius_to_excel(self, P_fit, P_uncert, D_fit, D_uncert, S_fit, S_uncert, Tmin, Tmax, Tmin_unc, Tmax_unc):
         """ Save the pre-exponential factors and activation energies determined via Arrhenius fit to Excel """
         filename = asksaveasfilename(initialdir=os.path.dirname(__file__), defaultextension=".xlsx")
         if filename != '':
-            data = {'Value': [D_fit[1], D_fit[0], S_fit[1], S_fit[0], P_fit[1], P_fit[0]],
-                    'Uncertainty': [D_uncert[1], D_uncert[0], S_uncert[1], S_uncert[0], P_uncert[1], P_uncert[0]],
+            data = {'Value': [D_fit[1], D_fit[0], S_fit[1], S_fit[0], P_fit[1], P_fit[0], Tmin, Tmax],
+                    'Uncertainty': [D_uncert[1], D_uncert[0], S_uncert[1], S_uncert[0],
+                                    P_uncert[1], P_uncert[0], Tmin_unc, Tmax_unc],
                     'Units': ['[m\u00b2 s\u207b\u00b9]', '[kJ mol\u207b\u00b9]',
                               '[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]', '[kJ mol\u207b\u00b9]',
-                              '[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]', '[kJ mol\u207b\u00b9]']}
+                              '[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]', '[kJ mol\u207b\u00b9]',
+                              '[\u00B0C]', '[\u00B0C]']}
 
             # Creates pandas DataFrame.
             df = DataFrame(data, index=['Pre-exponential factor for diffusivity:', 'Activation energy for diffusivity:',
                                         'Pre-exponential factor for solubility:', 'Activation energy for solubility:',
-                                        'Pre-exponential factor for permeability:', 'Activation energy for permeability:'])
+                                        'Pre-exponential factor for permeability:', 'Activation energy for permeability:',
+                                        'Minimum Sample Temperature:', 'Maximum Sample Temperature:'])
             df.to_excel(filename)
 
     def reset_scroll_region(self, event=None):
@@ -414,9 +424,10 @@ class Plots(tk.Frame):
         self.fig = Figure()
         self.ax = [self.fig.add_subplot(1, 3, i) for i in range(1, 4)]
         # The below line helps keep the graphs looking nice when the window gets made small. Note that tight_layout is
-        # an experimental feature as of 10/16/2021 and may be changed unpredictably.
-        # todo Update this to the official layout feature. See:
-        #      https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html
+        #   an experimental feature as of 10/16/2021 and may be changed unpredictably.
+        # As of 9/6/22, according to https://matplotlib.org/stable/api/prev_api_changes/api_changes_3.5.0.html there
+        #   was an update. This source says set_tight_layout is still fine:
+        #   https://matplotlib.org/stable/api/figure_api.html
         self.fig.set_tight_layout("True")
 
         # Format axes
@@ -516,7 +527,7 @@ class Plots(tk.Frame):
             self.ax[i].set_xlim(self.xmin, self.max)
 
             # top axis
-            self.axC[i].set_xlabel("Temperature, T (\u2103)")
+            self.axC[i].set_xlabel(" Temperature, T (\u00B0C) ")  # Space at the start&end b/c on Mac, T&e are too close
             self.axC[i].set_xlim(self.xmin, self.max)
 
             # redo the top ticks so that they line up with proper positions for Celsius
@@ -585,7 +596,7 @@ class EditMaterials(tk.Toplevel):
         self.add_entry = widgets.add_entry
 
         self.title("Add or Edit Materials")
-        self.resizable(width=False, height=False)
+        # self.resizable(width=False, height=False)
         self.minsize(400, 170)
 
         # gui_x/y values determined by running self.updateidletasks() at the end of self.__init__ and then printing size
@@ -1007,7 +1018,7 @@ class EditMaterials(tk.Toplevel):
                                             self.K0.get(), self.E_K.get(), self.tmin_s.get(), self.tmax_s.get()]
 
                 # overwrite the old source file with the updated dataframe
-                material_filename = os.path.join('datafiles', 'material_data.xlsx')
+                material_filename = os.path.join('data_files', 'material_data.xlsx')
                 self.storage.material_data.to_excel(material_filename)
                 # This next bit is needed because to_excel formats named indexes poorly
                 import openpyxl
@@ -1020,7 +1031,7 @@ class EditMaterials(tk.Toplevel):
                 # the melting temperatures source file, then update that source file.
                 if not np.isnan(self.tmelt.get()):
                     self.storage.melting_tempK.loc[self.material.get()] = [self.tmelt.get()]
-                    self.storage.melting_tempK.to_excel(os.path.join('datafiles', 'melting_tempK.xlsx'))
+                    self.storage.melting_tempK.to_excel(os.path.join('data_files', 'melting_tempK.xlsx'))
 
                 self.changed = True
                 self.destroy()
@@ -1055,7 +1066,7 @@ class EditMaterials(tk.Toplevel):
                     self.storage.material_data.drop(index=self.material.get(), inplace=True)
 
                     # overwrite the old source file with the updated dataframe
-                    material_filename = os.path.join('datafiles', 'material_data.xlsx')
+                    material_filename = os.path.join('data_files', 'material_data.xlsx')
                     self.storage.material_data.to_excel(material_filename)
                     # This next bit is needed because to_excel formats named indexes poorly
                     import openpyxl
@@ -1068,7 +1079,7 @@ class EditMaterials(tk.Toplevel):
                     # updating the melting temperatures source file, then update that source file.
                     if self.material.get() in self.storage.melting_tempK.index:
                         self.storage.melting_tempK.drop(index=self.material.get(), inplace=True)
-                        self.storage.melting_tempK.to_excel(os.path.join('datafiles', 'melting_tempK.xlsx'))
+                        self.storage.melting_tempK.to_excel(os.path.join('data_files', 'melting_tempK.xlsx'))
 
                 self.changed = True
                 self.destroy()  # Closes Add/Edit Materials window
