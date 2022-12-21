@@ -102,7 +102,7 @@ class Storage:
         self.Det_QMS = tk.StringVar(value="NOPE")  # Check if detectable via QMS
         self.Sat_QMS = tk.StringVar(value="NOPE")  # Check if saturate the QMS
 
-        # tolerance used for finding steady state during permeation data analysis and equilibrium during absorption d.a.
+        # tolerance used for finding steady state during permeation data analysis
         self.tol = tk.DoubleVar(value=1e-6)
         # minimum number of seconds following t0 before finding a steady state or equilibrium
         self.t_del = tk.DoubleVar(value=100)  # Note, as of 5/28/22, this isn't used in absorption_plots.py
