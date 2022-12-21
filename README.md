@@ -1,11 +1,13 @@
-# Hydrogen Permeation and Absorption Tool (HyPAT V2.0.0)
+# Hydrogen Permeation and Absorption Tool (HyPAT v2.0.0)
 ## About 
-The Hydrogen Permeation and Absorption Tool (HyPAT V2.0.0)  is an application that streamlines data analysis for hydrogen 
+The Hydrogen Permeation and Absorption Tool (HyPAT v2.0.0)  is an application that streamlines data analysis for hydrogen 
 permeation and absorption experiments to measure the following hydrogen transport properties: permeability, diffusivity, 
 and solubility. Specifically, HyPAT analyzes data from gas-driven permeation through metals using the build-up in closed 
 volume method and data from absorption experiments using a Sieverts'-type apparatus. A built-in literature database 
 provides direct comparison for experimental results as well as timescale and permeation rate estimates for experiment 
 preparation based on the user-input parameters. 
+
+Find more details about HyPAT v1.0.0 in the SoftwareX publication ["HyPAT: A GUI for high-throughput gas-driven hydrogen permeation data analysis."](https://doi.org/10.1016/j.softx.2022.101284) A publication on HyPAT v2.0.0 is in progress.
 
 ## Description
 The Hydrogen Permeation and Absorption Tool (HyPAT) provides a convenient application that allows the user to 
