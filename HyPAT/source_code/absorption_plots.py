@@ -1,4 +1,4 @@
-""" Code for the Permeation Plots tab in HyPAT """
+""" Code for the Absorption Plots tab in HyPAT """
 import matplotlib
 matplotlib.use("TkAgg")  # backend of matplotlib. needs to be here
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -10,7 +10,7 @@ from tkinter.filedialog import askdirectory, asksaveasfilename
 from tkinter.messagebox import showerror
 import matplotlib.pyplot as plt
 import os
-from .data_storage import Widgets, LoadingScreen
+from .data_storage import Widgets, FormatLabel, LoadingScreen
 from scipy.optimize import curve_fit
 import mplcursors  # adds the hover-over feature to labels. This library has good documentation
 import openpyxl
@@ -18,34 +18,20 @@ import platform  # allows for Mac vs. Windows adaptions
 # make certain warnings appear as errors, allowing them to be caught using a try/except clause
 import warnings
 from scipy.optimize import OptimizeWarning
-warnings.simplefilter("error", OptimizeWarning)
+warnings.simplefilter("error", OptimizeWarning)  # used during curve_fit
 
 
-class PermeationPlots(tk.Frame):
+class AbsorptionPlots(tk.Frame):
 
     def __init__(self, parent, storage, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         # container for important variables
         self.storage = storage
         self.datafiles = {}  # Store Excel files
-
+        self.inputs = {}
         self.header = []  # Container for titles of each column in your data file that will be used
         self.needed_cols = []  # Container that will hold the column number for each needed data set
         self.converters_dict = {}  # Container for functions for converting data into correct units
-
-        self.num_GasT = 1  # Number of TCs measuring GasT
-
-        # When determining uncertainty, the program will pick the max of the calculated statistical uncertainty,
-        # the constant uncertainty, and the proportional uncertainty. These are containers for the constant and
-        # proportional uncertainties of each instrument
-        self.GasT_cerr = {}  # degrees C, i.e., +/- 2.2 degrees C (constant uncertainty)
-        self.GasT_perr = {}  # percentage, i.e., +/- 0.75% of total measurement (in Celsius) (proportional uncertainty)
-        self.SampT_cerr = {}
-        self.SampT_perr = {}
-        self.SecP_cerr = {}  # Pa (constant uncertainty)
-        self.SecP_perr = {}  # percentage, (proportional uncertainty)
-        self.PrimP_cerr = {}
-        self.PrimP_perr = {}
 
         # store widgets
         self.widgets = Widgets()
@@ -60,21 +46,8 @@ class PermeationPlots(tk.Frame):
         self.bottom_frame = tk.Frame(self, bd=10)
         self.bottom_frame.grid(row=1, column=0, sticky="nsew")
 
-        # user inputs
         self.frame = tk.LabelFrame(self.top_frame, bd=8)
         self.frame.grid(row=0, column=0, sticky="nsew")
-        self.inputs = {}
-
-        self.directory = ""
-        self.loading_data = False  # Keep track of whether data is currently being loaded by this tab
-        self.refreshing = False  # If false, ask for a directory when select_file gets called
-        self.file_type = ""
-        self.time_type = 0  # Used to determine which converter function to use for the time instrument
-        self.days = -1  # How many days have passed during the experiment (used for datetime conversion to seconds)
-        self.this_date_time = 0  # Current datetime (used for datetime conversion to seconds)
-        self.init_time = 0  # Initial datetime in seconds (used for datetime conversion to seconds)
-        self.extra_time = 0  # Extra time to be accounted for (used for datetime conversion to seconds)
-        self.error_texts = ""  # Text variable for storing the error texts that may come up when files are loaded
 
         # arrange frames in tab
         self.rowconfigure((0, 1), weight=1)
@@ -84,61 +57,90 @@ class PermeationPlots(tk.Frame):
         self.bottom_frame.rowconfigure(0, weight=1)
         self.bottom_frame.columnconfigure((0, 1, 2), weight=1)
 
-        # variables for input
-        self.sample_thickness = tk.DoubleVar(value=1)
-        self.volume = tk.DoubleVar(value=(self.storage.defaults_info["Secondary Side Volume [cc]"][0]) * 10 ** -6)
-        self.ss_tol = tk.DoubleVar(value=self.storage.tol.get())  # Tolerance for finding the steady state
-        self.ss_t_del = tk.DoubleVar(value=self.storage.t_del.get())  # Minimum time after t0 before looking for ss
-        self.leak_range = {}  # Dict for holding the range used in finding leaks and initial values for each file
-        self.ss_range = {}  # Dict for holding the range used in finding ss and ss values for each file
-        self.gen_leak_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to determine leak over
-        self.gen_ss_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to determine ss over
-        # default area is the inner area of the default O-ring
-        self.A_perm = tk.DoubleVar()
-        inner_diameter = self.storage.oring_info.loc[self.storage.oring_info.index[0],
-                                                     self.storage.oring_info.columns[1]]
-        A_perm_str = "{:.2e}".format(
-            np.pi * (inner_diameter / 2 * 0.001) ** 2)  # Provides a way to round to sig figs
-        self.A_perm.set(float(A_perm_str))
-        # Variables for storing uncertainty, rounded to avoid numerical errors
-        self.volume_err = tk.DoubleVar(value=round(self.volume.get()*0.05, 13))
-        self.A_perm_err = tk.DoubleVar(value=round(self.A_perm.get()*0.05, 13))
-        self.sample_thickness_err = tk.DoubleVar(value=round(self.sample_thickness.get()*0.05, 13))
+        self.directory = ""
+        self.loading_data = False  # Keep track of whether data is currently being loaded by this tab
+        self.refreshing = False  # If false, ask for a directory when select_file gets called
+        self.file_type = ""
+        self.time_type = 0  # Used to determine which converter function to use for the time instrument.
+        self.days = -1  # How many days have passed during the experiment (used for datetime conversion to seconds)
+        self.this_date_time = 0  # Current datetime (used for datetime conversion to seconds)
+        self.init_time = 0  # Initial datetime in seconds (used for datetime conversion to seconds)
+        self.extra_time = 0  # Extra time to be accounted for (used for datetime conversion to seconds)
+        self.error_texts = ""  # Text variable for storing the uncertainty texts that may come up when files are loaded
+        self.troubleshooting_df = pd.DataFrame()  # DataFrame to contain variables when troubleshooting
 
-        # permeation variables
+        self.num_GasT0 = 1  # Number of TCs measuring GasT initial
+        self.num_GasT = 1  # Number of TCs measuring GasT after the isolation valve has opened
+
+        # When determining uncertainty, the program will pick the max of the calculated statistical uncertainty, the
+        # constant uncertainty, and the proportional uncertainty. These are containers for the constant and
+        # proportional uncertainties of each instrument
+        self.GasT_cerr = {}  # degrees C, i.e., +/- 2.2 degrees C (constant uncertainty)
+        self.GasT_perr = {}  # percentage, i.e., +/- 0.75% of total measurement (in Celsius) (proportional uncertainty)
+        self.SampT_cerr = {}
+        self.SampT_perr = {}
+        self.Pres_cerr = {}  # Pa (constant uncertainty)
+        self.Pres_perr = {}  # percentage, (proportional uncertainty)
+
+        # variables for input and uncertainty of inputs
+        self.sample_thickness = tk.DoubleVar(value=0.2)
+        self.sample_thickness_err = tk.DoubleVar(value=round(self.sample_thickness.get()*0.05, 13))
+        self.Vs_cm3 = tk.DoubleVar(value=5.8e-2)   # Volume of initial container
+        self.Vs_cm3_err = tk.DoubleVar(value=round(self.Vs_cm3.get() * 0.005, 13))
+        self.Vic_cm3 = tk.DoubleVar(value=379.0)  # Volume of initial container
+        self.Vic_cm3_err = tk.DoubleVar(value=2.3)  # round(self.Vic_cm3.get() * 0.005, 13))
+        self.Vsc_cm3 = tk.DoubleVar(value=66.4)  # cm^3 Volume of sample container
+        self.Vsc_cm3_err = tk.DoubleVar(value=0.6)  # round(self.Vsc_cm3.get() * 0.005, 13))
+        self.ms_g = tk.DoubleVar(value=2)  # g Mass of sample
+        self.ms_g_err = tk.DoubleVar(value=round(self.ms_g.get() * 0.05, 13))
+        # todo Uncomment self.rhos_gcm3 and self.rho_gcm3_err here and elsewhere, then connect them to the code so they
+        #      do things and update when needed
+        # self.rhos_gcm3 = tk.DoubleVar(value=round(self.ms_g.get() / self.Vs_cm3.get(), 13))  # g/cm^3 density of sample
+        # self.rhos_gcm3_err = tk.DoubleVar(value=round((self.ms_g.get() / self.Vs_cm3.get()) *
+        #                                               np.sqrt((self.ms_g_err.get() / self.ms_g.get()) ** 2
+        #                                                       + (self.Vs_cm3_err.get() / self.Vs_cm3.get())** 2), 13))
+        self.exp_type = tk.StringVar(value="Single")
+        self.molar_mass = tk.DoubleVar(value=50.9440)  # g/mol default molar_mass
+        # Variables for determining initial and final values
+        self.e_tol = tk.DoubleVar(value=self.storage.tol.get())  # Tolerance for equilibrium
+        self.e_t_del = tk.DoubleVar(value=0)  # Minimum time after t0 before looking for eq.
+        self.i_range = {}  # Dict for holding the range used in finding initial values for each file
+        self.e_range = {}  # Dict for holding the range used in finding eq and eq value for each file
+        self.gen_i_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to find initial vals over
+        self.gen_e_range = tk.IntVar(value=self.storage.gen_dp_range.get())  # Default range to find eq and eq vals over
+
+        # absorption variables
+        self.p_num = {}  # number of pressures
         self.t0 = {}  # time when isolation valve opens (s)
-        self.tss = {}  # time when steady state pressure is achieved (s)
-        self.pleak_lf = {}  # linear fit for leak rate
-        self.pss_lf = {}  # linear fit for steady state
-        self.Prate = {}  # steady state permeation rates (pss_lf minus pleak_lf)
-        self.Prate_err = {}
-        self.F = {}  # flux
-        self.F_err = {}
+        self.t_e = {}  # time when equilibrium pressure is achieved (s)
         self.Phi = {}  # permeability
         self.Phi_err = {}
-        self.Perm_Plot = {}  # real time permeability (for plotting against time) adjusted for the pressure leak
         self.Tg0 = {}  # Temperature of gas at t0 (using an average over time and instruments) (K)
-        self.Tgss = {}  # Temperature of gas at tss (using an average over time and instruments) (K)
-        self.Tgss_err = {}
+        self.Tg_e = {}  # Temperature of gas at t_e (using an average over time and instruments) (K)
+        self.Tg_e_err = {}
         self.artists = []  # store points for Perm/Dif/Sol vs. Temp graph
-        self.Tsamp0 = {}  # Sample temperature at t0 (using an average over time and instruments) (K)
-        self.Tsampss = {}  # Sample temperature at tss (using an average over time and instruments) (K)
-        self.Tsampss_err = {}
-        self.SecP_average = {}  # Secondary Side Pressure (using an average over time)
-        self.SecP_err = {}
-        self.PrimP_average = {}  # Primary Side Pressure (using an average over time)
-        self.PrimP_err = {}
+        self.Ts0 = {}  # Sample temperature at t0 (using an average over time and instruments) (K)
+        self.Ts_e = {}  # Sample temperature at t_e (using an average over time and instruments) (K)
+        self.Ts_e_err = {}
+        self.pr0_avg = {}  # Pressure at t0 (using an average) (Pa)
+        self.pr_e_avg = {}  # Pressure at t_e (using an average) (Pa)
+        self.pr_e_err = {}
+        self.ns0 = {}  # Initial moles absorbed by sample
+        self.ns0_err = {}
+        self.ns_e = {}  # Total moles absorbed by sample
+        self.ns_e_err = {}
+        self.ns_t = {}  # Number of moles in sample as a function of time
+        self.HM = {}  # Hydrogen to metal atoms ratio
+        self.HM_err = {}
 
         # diffusivity variables
-        self.intercept = {}
-        self.tlag = {}
-        self.D = {}  # diffusivity
+        self.D = {}
         self.D_err = {}
         self.A = {}  # proportionality constant
         self.dt = {}  # additive time constant
         self.D_time = {}  # time over which D is calculated
         self.lhs = {}  # for the diffusivity optimization comparison
-        self.rhs = {}  # time-lag method
+        self.rhs = {}  # analytical solution (non-fit)
         self.rhs_cf = {}  # curve_fit
 
         # solubility variables
@@ -146,67 +148,82 @@ class PermeationPlots(tk.Frame):
         self.Ks_err = {}
 
         # text variables for labels
-        self.Prate_label = tk.DoubleVar(value=0)
-        self.F_label = tk.DoubleVar(value=0)
-        self.Phi_label = tk.DoubleVar(value=0)
-        self.D_label = tk.DoubleVar(value=0)
-        self.K_label = tk.DoubleVar(value=0)
-        self.Prate_err_label = tk.DoubleVar(value=0)
-        self.F_err_label = tk.DoubleVar(value=0)
+        self.pr_e_label = tk.DoubleVar(value=0)  # Equilibrium Pressure
+        self.pr_e_err_label = tk.DoubleVar(value=0)
+        self.ns_e_label = tk.DoubleVar(value=0)    # Moles absorbed
+        self.ns_e_err_label = tk.DoubleVar(value=0)
+        self.eq_t_label = tk.DoubleVar(value=0)  # Time to equilibrium
+        self.eq_t_err_label = tk.DoubleVar(value=0)
+        self.Phi_label = tk.DoubleVar(value=0)  # Permeability
         self.Phi_err_label = tk.DoubleVar(value=0)
+        self.D_label = tk.DoubleVar(value=0)  # Diffusivity
         self.D_err_label = tk.DoubleVar(value=0)
+        self.K_label = tk.DoubleVar(value=0)  # Solubility
         self.K_err_label = tk.DoubleVar(value=0)
+        self.p_num_label = tk.IntVar(value=0)  # Number of pressures in an isotherm
 
-        # add frames and buttons to view important variables
+        # add frames and buttons to view important variable
 
-        entry_row = 1
+        entry_row = 0
         self.add_entry3(self, self.frame, variable=self.inputs, key="ls", text="Sample Thickness: l",
                         subscript="s", tvar1=self.sample_thickness, tvar2=self.sample_thickness_err,
                         update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
                         units="[mm]", row=entry_row)
+        entry_row += 1
 
-        self.add_entry3(self, self.frame, variable=self.inputs, key="A_perm", text="Permeation Surface Area: A",
-                        subscript="perm", tvar1=self.A_perm, tvar2=self.A_perm_err,
+        self.add_entry3(self, self.frame, variable=self.inputs, key="ms_g", text="Sample Mass: m",
+                        subscript="s", tvar1=self.ms_g, tvar2=self.ms_g_err,
                         update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
-                        units="[m\u00b2]", row=entry_row + 1)  # "[m^2]"
+                        units="[g]", row=entry_row)
+        entry_row += 1
 
-        self.add_entry3(self, self.frame, variable=self.inputs, key="V", text="Secondary Side Volume: V",
-                        subscript="sec", tvar1=self.volume, tvar2=self.volume_err, units="[m\u00B3]",  # "[m^3]"
+        self.add_entry3(self, self.frame, variable=self.inputs, key="Vs_cm3", text="Sample Volume: V",
+                        subscript="s", tvar1=self.Vs_cm3, tvar2=self.Vs_cm3_err, units="[cm\u00B3]",  # "[cm^3]"
                         update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
-                        row=entry_row + 2)
+                        row=entry_row)
+        entry_row += 1
 
-        label_row = 4
-        self.add_text2(self.frame, text="Permeation Rate: dP/dt", subscript="", tvar1=self.Prate_label,
-                       tvar2=self.Prate_err_label, units="[Pa s\u207b\u00b9]", row=label_row)
-        self.add_text2(self.frame, text="Molar Flux: J", subscript="inf", tvar1=self.F_label, tvar2=self.F_err_label,
-                       units="[mol m\u207b\u00b2 s\u207b\u00b9]", row=label_row + 1)  # "[mol/m^2 s]"
-        self.add_text2(self.frame, text="Permeability: \u03A6", subscript="", tvar1=self.Phi_label, tvar2=self.Phi_err_label,
+        self.add_entry3(self, self.frame, variable=self.inputs, key="Vic_cm3", text="Initial Container Volume: V",
+                        subscript="ic", tvar1=self.Vic_cm3, tvar2=self.Vic_cm3_err, units="[cm\u00B3]",  # "[cm^3]"
+                        update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
+                        row=entry_row)
+        entry_row += 1
+
+        self.add_entry3(self, self.frame, variable=self.inputs, key="Vsc_cm3", text="Sample Container Volume: V",
+                        subscript="sc", tvar1=self.Vsc_cm3, tvar2=self.Vsc_cm3_err, units="[cm\u00B3]",  # "[cm^3]"
+                        update_function=lambda tvar, var_type, key: self.update_function(tvar, var_type, key),
+                        row=entry_row)
+        entry_row += 1
+
+        label_row = entry_row
+        # todo Uncomment self.rhos_gcm3 and self.rho_gcm3_err stuff here and elsewhere, then connect them to the code so
+        #      they do things and update when needed
+        # self.add_text2(self.frame, text="Sample Density: \u03C1", subscript="s", tvar1=self.rhos_gcm3,
+        #                tvar2=self.rhos_gcm3_err, units="[g/cm\u00B3]",
+        #                row=label_row)  # No "_label" in rho's name because rho doesn't change based on file
+        # label_row += 1
+        self.add_text2(self.frame, text="Equilibrium Pressure: P", subscript="e", tvar1=self.pr_e_label,
+                       tvar2=self.pr_e_err_label, units="[Pa]", row=label_row)
+        label_row += 1
+        self.add_text2(self.frame, text="Moles Absorbed by Sample: n", subscript="se", tvar1=self.ns_e_label,
+                       tvar2=self.ns_e_err_label, units="[mol]", row=label_row)
+        label_row += 1
+        self.add_text2(self.frame, text="Time to Equilibrium: t", subscript="e", tvar1=self.eq_t_label,
+                       tvar2=self.eq_t_err_label, units="[s]", row=label_row)
+        label_row += 1
+        self.add_text2(self.frame, text="Permeability: \u03A6", subscript="", tvar1=self.Phi_label,
+                       tvar2=self.Phi_err_label,
                        units="[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",   # "[mol/msPa^0.5]"
-                       row=label_row + 2)
+                       row=label_row)
+        label_row += 1
         self.add_text2(self.frame, text="Diffusivity: D", subscript="", tvar1=self.D_label, tvar2=self.D_err_label,
-                       units="[m\u00b2 s\u207b\u00b9]", row=label_row + 3)
+                       units="[m\u00b2 s\u207b\u00b9]", row=label_row)
+        label_row += 1
         self.add_text2(self.frame, text="Solubility: K", subscript="s", tvar1=self.K_label, tvar2=self.K_err_label,
-                       units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]", row=label_row + 4)
+                       units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]", row=label_row)
+        label_row += 1
 
-        button_row = 10
-        self.b0 = ttk.Button(self.frame, text='Choose folder', command=self.select_file)
-        self.b0.grid(row=button_row, column=1, sticky="ew")
-        b1 = ttk.Button(self.frame, text='Refresh', command=self.refresh_graphs)
-        b1.grid(row=button_row, column=3, sticky="ew")
-
-        settings_b = ttk.Button(self.frame, text='Settings', command=self.adjust_persistent_vars)
-        settings_b.grid(row=button_row, column=4, sticky="ew")
-
-        b2 = ttk.Button(self.frame, text='Close popout plots', command=lambda: plt.close('all'))
-        b2.grid(row=button_row + 1, column=1, sticky="ew")
-
-        self.coord_b = ttk.Button(self.frame, text="Enable Coordinates", command=self.toggle_coordinates)
-        self.coord_b.grid(row=button_row + 1, column=3, sticky="ew")
-
-        b3 = ttk.Button(self.frame, text='Save current figures', command=self.save_figures)
-        b3.grid(row=button_row + 1, column=4, sticky="w")
-
-        menu_row = button_row + 2
+        menu_row = label_row
         self.add_text0(self.frame, text="Current File:", subscript="", row=menu_row)
         # menu to choose which file to display
         self.current_file = tk.StringVar(value='No files yet')
@@ -214,34 +231,86 @@ class PermeationPlots(tk.Frame):
         self.filemenu.grid(row=menu_row, column=1, columnspan=4, sticky='ew')
         self.current_file.trace_add("write", self.generate_plots)
 
-        # menu to choose which measurement (P, D, K, or flux) to display in bottom left graph
-        self.current_variable = tk.StringVar(value='Permeability')
+        # menu to choose which measurement (P, D, K) to display in bottom left graph
+        self.current_variable = tk.StringVar(value='Solubility')
         self.add_text0(self.frame, text="Current Measurement:", subscript="", row=menu_row + 1)
-        self.PDK_menu = tk.OptionMenu(self.frame, self.current_variable, 'Permeability', 'Diffusivity',
-                                      'Solubility', 'Flux')
-        self.PDK_menu.grid(row=menu_row + 1, column=1, columnspan=3, sticky='ew')
+        self.PDK_menu = tk.OptionMenu(self.frame, self.current_variable, 'Solubility', 'Diffusivity', 'Permeability')
+        self.PDK_menu.grid(row=menu_row + 1, column=1, columnspan=4, sticky='ew')
         self.current_variable.trace_add("write", self.update_PDK_plot)
 
-        b4 = ttk.Button(self.frame, text='Export to Excel', command=self.export_data)
-        b4.grid(row=menu_row + 1, column=4, sticky="ew")
+        sidecol = 5
+        self.add_text0(self.frame, text="Experiment Type:", subscript="", row=0, column=sidecol, sticky='w')
+        self.experiment_type_menu = tk.OptionMenu(self.frame, self.exp_type, *list(["Single", "Isotherm"]))
+        self.experiment_type_menu.config(bg="yellow")
+        self.experiment_type_menu.grid(row=1, column=sidecol, columnspan=4,
+                                       sticky="ew")
+
+        self.add_text0(self.frame, text="Sample Molar Mass:", subscript="", row=2, column=sidecol, sticky="w")
+        mm_frame = tk.Frame(self.frame)  # Frame for the molar mass
+        mm_frame.grid(row=3, column=sidecol, sticky="w")
+        self.add_entry(self, mm_frame, variable=self.inputs, key="molar_mass", text="", subscript="",
+                       units="[g/mol]", tvar=self.molar_mass, row=1,
+                       command=lambda tvar, variable, key: self.storage.check_for_number(tvar, variable, key))
+        mm_frame.columnconfigure((0, 2), weight=1)
+        self.inputs['molar_mass'].config(width=10)
+
+        self.npframe = tk.Frame(self.frame)
+        self.npframe.grid(row=4, column=sidecol, sticky="w")
+        self.add_text0(self.npframe, text="Number of Pressures:", subscript="", row=0, sticky="w")
+        FormatLabel(self.npframe, textvariable=self.p_num_label, borderwidth=1, relief="ridge",
+                    ).grid(row=0, column=1, sticky="w")
+        tk.Label(self.npframe, text="  ").grid(row=0, column=2, sticky='w')  # Give the label some right-side padding
+        self.npframe.columnconfigure(0, weight=1)
+
+        button_row = 6
+        ttk.Style(self).configure('Tight.TButton', width="")  # Remove the extra space from the button
+
+        self.b0 = ttk.Button(self.frame, text='Choose folder', command=self.select_file)
+        self.b0.grid(row=button_row, column=sidecol, sticky="w")
+        button_row += 1
+        b1 = ttk.Button(self.frame, text='Refresh', command=self.refresh_graphs, style="Tight.TButton")
+        b1.grid(row=button_row, column=sidecol, sticky="w")
+        button_row += 1
+        settings_b = ttk.Button(self.frame, text='Settings', command=self.adjust_persistent_vars, style="Tight.TButton")
+        settings_b.grid(row=button_row, column=sidecol, sticky="w")
+        button_row += 1
+        self.coord_b = ttk.Button(self.frame, text="Enable Coordinates", command=self.toggle_coordinates)
+        self.coord_b.grid(row=button_row, column=sidecol, sticky="w")
+        button_row += 1
+        b2 = ttk.Button(self.frame, text='Close popout plots', command=lambda: plt.close('all'))
+        b2.grid(row=button_row, column=sidecol, sticky="w")
+        button_row += 1
+        b3 = ttk.Button(self.frame, text='Export to Excel', command=self.export_data)
+        b3.grid(row=button_row, column=sidecol, sticky="w")
+        button_row += 1
+        b4 = ttk.Button(self.frame, text='Save current figures', command=self.save_figures)
+        b4.grid(row=button_row, column=sidecol, sticky="w")
+        button_row += 1
+
+        # make all the rows in the top left frame have the same size and change size at the same rate
+        self.frame.rowconfigure(tuple(range(menu_row + 2)), weight=1, uniform="row")
+
+        # Configure how the columns squish so that only the text box columns squish
+        self.frame.columnconfigure((0, 2, 4, 5), weight=1)
+        # self.frame.columnconfigure(tuple(range(6)), weight=1)  # option for squishing all columns instead
 
         # Store the "set_message" functions
         self.message_function = {}
 
         # create bottom left plot
-        self.ax_title = "Permeability vs. Temperature"
+        self.ax_title = "Solubility vs. Temperature"
         self.ax_xlabel = " Temperature (\u00B0C) "  # Space at the beginning and end is b/c on Mac, T & e are too close
-        self.ax_ylabel = "Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
+        self.ax_ylabel = "Solubility (mol m$^{-3}$ Pa$^{-0.5}$)"
         self.fig, self.ax, self.canvas, self.toolbar = self.add_plot(self.bottom_frame,
                                                                      xlabel=self.ax_xlabel,
                                                                      ylabel=self.ax_ylabel,
                                                                      title=self.ax_title,
                                                                      row=0, column=0, axes=[.3, .15, .65, .75])
         # create top right plot
-        self.ax1_title = "Pressure vs. Time"
+        self.ax1_title = "Raw Data"
         self.ax1_xlabel = "Time (s)"
-        self.ax1_ylabel = "Secondary Pressure (Pa)"
-        self.ax12_ylabel = "Primary Pressure (Pa)"
+        self.ax1_ylabel = "Pressure (Pa)"
+        self.ax12_ylabel = " Temperature (\u00B0C) "  # Space at the beginning & end is b/c on Mac, T & e are too close
         self.fig1, self.ax1, self.canvas1, self.toolbar1 = self.add_plot(self.top_frame,
                                                                          xlabel=self.ax1_xlabel,
                                                                          ylabel=self.ax1_ylabel,
@@ -251,27 +320,24 @@ class PermeationPlots(tk.Frame):
         self.ax12.set_ylabel(self.ax12_ylabel)
         # The top right plot would flicker every time the order of magnitude of the cursor's location would change, so
         # the following line changes the format of the displayed x & y coordinates. The specific format chosen was the
-        # result of trial and error in conjunction with editing the text of the entry boxes for ss_tol and ss_t_del
+        # result of trial and error in conjunction with editing the text of the entry boxes for e_tol and e_t_del
         # (which are now accessed by a button). This is kept in case coordinates are changed to on by default again.
         self.ax12.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
 
         # Create bottom middle plot
-        self.ax2_title = "Permeability vs. Time"
-        self.ax2_xlabel = "Time (s)"
-        self.ax2_ylabel = r"Permeability (mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5}$)"
-        self.ax22_ylabel = "Sample Temperature (\u00B0C)"
+        self.ax2_title = "Pressure-Composition-Temperature"
+        self.ax2_xlabel = "Composition (H/M)"
+        self.ax2_ylabel = "Pressure (Pa)"
         self.fig2, self.ax2, self.canvas2, self.toolbar2 = self.add_plot(self.bottom_frame,
                                                                          xlabel=self.ax2_xlabel,
                                                                          ylabel=self.ax2_ylabel,
                                                                          title=self.ax2_title,
                                                                          row=0, column=1, axes=[.15, .15, .7, .75])
-        self.ax22 = self.ax2.twinx()
-        self.ax22.set_ylabel(self.ax22_ylabel)
 
         # Create bottom right plot
         self.ax3_title = "Diffusivity Optimization Comparison"
         self.ax3_xlabel = "Time (s)"
-        self.ax3_ylabel = r"$(~J_{\mathrm{t}} - J_{\mathrm{0}}~)~/~(~J_{\mathrm{inf}} - J_{\mathrm{0}}~)$"
+        self.ax3_ylabel = r"$(~n_{\mathrm{t}} - n_{\mathrm{0}}~)~/~(~n_{\mathrm{inf}} - n_{\mathrm{0}}~)$"
         self.fig3, self.ax3, self.canvas3, self.toolbar3 = self.add_plot(self.bottom_frame,
                                                                          xlabel=self.ax3_xlabel,
                                                                          ylabel=self.ax3_ylabel,
@@ -283,11 +349,10 @@ class PermeationPlots(tk.Frame):
         self.ax1.format_coord = lambda x, y: ''
         self.ax12.format_coord = lambda x, y: ''
         self.ax2.format_coord = lambda x, y: ''
-        self.ax22.format_coord = lambda x, y: ''
         self.ax3.format_coord = lambda x, y: ''
 
         # Counteracts a bug of layout="constrained" which causes four plots to be generated but not shown until a
-        # Popout Plot button is clicked
+        # Popout Plot button is clicked:
         plt.close("all")
 
     def toggle_coordinates(self):
@@ -298,7 +363,6 @@ class PermeationPlots(tk.Frame):
             self.ax1.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
             self.ax12.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
             self.ax2.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
-            self.ax22.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
             self.ax3.format_coord = lambda x, y: "({:3g}, ".format(x) + "{:3g})".format(y)
             # Turn on status bar
             self.toolbar.set_message = self.message_function[self.ax]
@@ -312,7 +376,6 @@ class PermeationPlots(tk.Frame):
             self.ax1.format_coord = lambda x, y: ''
             self.ax12.format_coord = lambda x, y: ''
             self.ax2.format_coord = lambda x, y: ''
-            self.ax22.format_coord = lambda x, y: ''
             self.ax3.format_coord = lambda x, y: ''
             # Turn off status bar
             self.toolbar.set_message("")
@@ -377,7 +440,6 @@ class PermeationPlots(tk.Frame):
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         ax.set_title(title)
-
         canvas = FigureCanvasTkAgg(fig, master=frame)
         canvas.draw()
 
@@ -386,11 +448,11 @@ class PermeationPlots(tk.Frame):
         b = tk.Button(master=toolbar, text="Popout Plot", command=lambda x=ax: self.popout_plot(x))
         b.pack(side="left", padx=1)
 
-        # Add a button that allows user input of various steady state variables
-        if title == 'Pressure vs. Time':
+        # Add a button that allows user input of various equilibrium variables
+        if title == 'Raw Data':
             entry_frame = tk.Frame(toolbar)
             entry_frame.pack(side="left", padx=1)
-            b = tk.Button(entry_frame, text='Steady State Variables', command=self.adjust_ss_vars)
+            b = tk.Button(entry_frame, text='Equilibrium Variables', command=self.adjust_e_vars)
             b.grid(row=0, column=4, sticky="w")
 
         # Store and turn off the capability to update the status bar
@@ -415,7 +477,7 @@ class PermeationPlots(tk.Frame):
         self.select_file()
 
     def select_file(self):
-        """ Facilitates loading data and plotting the permeation tab plots """
+        """ Facilitates loading data and plotting the absorption tab plots """
         if self.loading_data and not self.refreshing:
             proceed = tk.messagebox.askyesno(title="Loading Data",
                                              message="Warning: Data is currently loading. Proceeding may cause " +
@@ -440,15 +502,15 @@ class PermeationPlots(tk.Frame):
                                                                             os.path.splitext(file)[1] == '.xlsx')]
             if not self.options:
                 tk.messagebox.showwarning(title="Missing Files",
-                                          message="Please select a folder with data.")
+                                          message="Please select a folder with data in the XLS or XLSX format.")
                 return
 
             self.loading_data = True
             try:
                 self.get_persistent_vars()  # Loads variables from a data file for use in analysis
-            except Exception as e:
+            except Exception as e:  # If there is a problem while trying to load the persistent variables
                 # If you want to see the traceback as part of the error text, change the below value to true
-                want_traceback = False
+                want_traceback = True
                 if want_traceback:
                     import traceback
                     full_traceback = "\n" + traceback.format_exc()
@@ -456,13 +518,13 @@ class PermeationPlots(tk.Frame):
                     full_traceback = ""
 
                 showerror('Loading Error', 'Unknown Error while obtaining persistent variables. No files were' +
-                          ' processed. The following exception was raised: "' + str(e) + '".' +
-                          full_traceback + '\n\n')
+                                           ' processed. The following exception was raised: "' + str(e) + '".' +
+                                           full_traceback + '\n\n')
                 self.loading_data = False
                 return
 
-            self.datafiles.clear()  # Clear the dictionary to avoid old data points appearing in PDK plot
             self.error_texts = ""  # Reset error_texts each time a folder is loaded
+            self.datafiles.clear()  # Clear the dictionary to avoid old data points appearing in PDK plot
 
             # Create the progress bar
             pb_len = len(self.options)
@@ -480,6 +542,7 @@ class PermeationPlots(tk.Frame):
                 # check if the file is good
                 status = self.check_file(os.path.join(self.directory, filename))
 
+                pname = ""  # Text to be added to the filename when using isotherms as a delineator
                 # Process the data by making the various calculations
                 if status:
                     # Reset these variables for each loadable file
@@ -487,48 +550,80 @@ class PermeationPlots(tk.Frame):
                     self.days = -1
                     self.extra_time = 0
 
-                    try:  # Catch most other errors that can happen while processing the data
-                        self.datafiles[filename] = self.extract_data(os.path.join(self.directory, filename))
+                    self.p_num[filename] = 1  # Default number of pressures for each file
+                    pcount = 0  # Keep track of which pressure in an isotherm is being processed
+                    old_pname = ""  # Store filename without the pressure number delineator
+                    # Keep processing data until all the pressures in the isotherm are processed
+                    while pcount < self.p_num[filename]:
+                        try:  # Catch most other errors that can happen while processing the data
+                            pcount += 1
+                            # Keep track of pressure number delineators
+                            if self.exp_type.get() == "Isotherm":
+                                pname = " p#{}".format(pcount)
+                                old_pname = " p#{}".format(pcount - 1)
 
-                        # Find row number where the Isolation Valve is 1st opened after being closed (aka, the start of
-                        # the experiment). Done in a try/except clause in case no opening is registered
-                        try:
-                            _t0 = np.where((self.datafiles[filename])['Isolation Valve'] == 0)[0]
-                            closed = np.where(np.diff(_t0) > 1)[0]
-                            if not closed.any():  # if the isolation valve wasn't closed again after being opened...
-                                # ...set t0 to be the data point after the last zero in the file
-                                self.t0[filename] = _t0[-1] + 1
-                            else:  # else, set t0 to be the data point after the last zero before the valve is opened
-                                self.t0[filename] = _t0[closed[0]] + 1
-                        except IndexError:
-                            self.error_texts += "Loading Error with file " + filename + \
-                                                ". Incorrect Isolation Valve format.\n\n"
-                            self.datafiles.pop(filename)
+                            # Load the data first time through; otherwise, truncate the old data
+                            if pcount == 1:
+                                self.datafiles[filename + pname] = \
+                                    self.extract_data(os.path.join(self.directory, filename))
+                                self.options.pop(self.options.index(filename))  # Remove old filename from the options
+                            else:  # Takes only the data after t0
+                                self.datafiles[filename + pname] = \
+                                    (self.datafiles[filename + old_pname])[self.t0[filename + old_pname]:]
+                                # Ensure the index is properly labeled
+                                self.datafiles[filename + pname].reset_index(drop=True, inplace=True)
+                                i += 1
+
+                            self.options.insert(i - 1, filename + pname)  # Add in the properly named option
+
+                            # Find row number where the Isolation Valve is 1st opened after being closed (aka, the start
+                            # of the experiment). Done in a try/except clause in case no opening is detected
+                            try:
+                                _t0 = np.where((self.datafiles[filename + pname])['Isolation Valve'] == 0)[0]
+                                closed = np.where(np.diff(_t0) > 1)[0]
+                                if not closed.any():  # if the isolation valve wasn't closed again after being opened...
+                                    # ...set t0 to be the data point after the last zero in the file
+                                    self.t0[filename + pname] = _t0[-1] + 1
+                                else:  # else, set t0 to the data point after the last zero before the valve is opened
+                                    self.t0[filename + pname] = _t0[closed[0]] + 1
+
+                                    # If the user is submitting an isotherm, and either there are data points after the
+                                    # last data point where the valve is closed, or there more than one separate
+                                    # places where the valve is closed after being opened (meaning there are multiple
+                                    # places where the valve is open)
+                                    if self.exp_type.get() == "Isotherm" and \
+                                            (len((self.datafiles[filename + pname])['Isolation Valve']) > _t0[-1] + 1 or
+                                             len(closed) > 1):
+                                        self.p_num[filename] += 1
+                            except IndexError:
+                                self.error_texts += "Loading Error with file " + filename + pname + \
+                                                    ". Incorrect Isolation Valve format.\n\n"
+                                self.datafiles.pop(filename + pname)
+                                status = False
+                            if status:  # Ensure status hasn't changed since original definition
+                                self.calculate_solubility(filename + pname, self.datafiles[filename + pname])
+                                self.calculate_diffusivity(filename + pname, self.datafiles[filename + pname])
+                                self.calculate_permeability(filename + pname, self.datafiles[filename + pname])
+                        except Exception as e:
+                            # If you want to see the traceback as part of the error text, change the below value to true
+                            want_traceback = True
+                            if want_traceback:
+                                import traceback
+                                full_traceback = "\n" + traceback.format_exc()
+                            else:
+                                full_traceback = ""
+
+                            self.error_texts += "Unknown Error with file " + filename + pname + '. The following' + \
+                                                ' exception was raised: "' + str(e) + '".' + full_traceback + '\n\n'
+                            try:
+                                self.datafiles.pop(filename + pname)
+                            except KeyError:
+                                self.error_texts += "Note: " + filename + pname + ' was never successfully loaded.' + \
+                                                    '\n\n'
                             status = False
-
-                        if status:  # Ensure status hasn't changed since original definition
-                            self.calculate_permeability(filename, self.datafiles[filename])
-                            self.calculate_diffusivity(filename, self.datafiles[filename])
-                            self.calculate_solubility(filename, self.datafiles[filename])
-                    except Exception as e:
-                        # If you want to see the traceback as part of the error text, change the below value to true
-                        want_traceback = True
-                        if want_traceback:
-                            import traceback
-                            full_traceback = "\n" + traceback.format_exc()
-                        else:
-                            full_traceback = ""
-
-                        self.error_texts += "Unknown Error with file " + filename + '. The following exception was' + \
-                                            ' raised: "' + str(e) + '".' + full_traceback + '\n\n'
-                        try:
-                            self.datafiles.pop(filename)
-                        except KeyError:
-                            self.error_texts += "Note: " + filename + ' was never successfully loaded.' + '\n\n'
-                        status = False
-
+                            break
                 if not status:  # If something is wrong with the file or with analyzing the file
-                    self.options.pop(self.options.index(filename))
+                    self.options.pop(self.options.index(filename + pname))
                     i -= 1
                 # Update the progress bar
                 try:
@@ -544,6 +639,14 @@ class PermeationPlots(tk.Frame):
 
             self.update_dataframe()
             self.update_option_menu()
+            # If data has been loaded into self.troubleshooting_df, save it to an XLSX file for analysis
+            if len(self.troubleshooting_df.index) != 0:
+                # This dataframe can be generated anywhere in the processing and then turned into an XLSX here
+                self.troubleshooting_df.to_excel("Troubleshooting File.xlsx")
+                print("TROUBLESHOOTING FILE SAVED")
+                self.troubleshooting_df = pd.DataFrame()  # Reset the dataframe after exporting
+
+
             try:
                 self.current_file.set(self.options[0])
             except IndexError:
@@ -568,6 +671,7 @@ class PermeationPlots(tk.Frame):
                 err_scrollbar = tk.Scrollbar(popup, command=errortext.yview)
                 err_scrollbar.grid(row=0, column=1, sticky="nsew")
                 errortext.configure(wrap=tk.WORD, yscrollcommand=err_scrollbar.set)
+
         self.loading_data = False
 
     def check_file(self, filename):
@@ -608,26 +712,26 @@ class PermeationPlots(tk.Frame):
         df = pd.DataFrame()
         for filename in self.options:
             df = pd.concat([df, pd.DataFrame(
-                {"Gas Temperature [K]": self.Tgss[filename],
-                 "Gas Temperature Uncertainty [K]": self.Tgss_err[filename],
-                 "Sample Temperature [K]": self.Tsampss[filename],
-                 "Sample Temperature Uncertainty [K]": self.Tsampss_err[filename],
-                 "Secondary Side Pressure [Pa]": self.SecP_average[filename],
-                 "Secondary Side Pressure Uncertainty [Pa]": self.SecP_err[filename],
-                 "Primary Side Pressure [Pa]": self.PrimP_average[filename],
-                 "Primary Side Pressure Uncertainty [Pa]": self.PrimP_err[filename],
+                {"Gas Temperature [K]": self.Tg_e[filename],
+                 "Gas Temperature Uncertainty [K]": self.Tg_e_err[filename],
+                 "Sample Temperature [K]": self.Ts_e[filename],
+                 "Sample Temperature Uncertainty [K]": self.Ts_e_err[filename],
+                 "Pressure [Pa]": self.pr_e_avg[filename],
+                 "Pressure Uncertainty [Pa]": self.pr_e_err[filename],
                  "Permeability [mol m^-1 s^-1 Pa^-0.5]": self.Phi[filename],
                  "Permeability Uncertainty [mol m^-1 s^-1 Pa^-0.5]": self.Phi_err[filename],
                  "Diffusivity [m^2 s^-1]": self.D[filename],
                  "Diffusivity Uncertainty [m^2 s^-1]": self.D_err[filename],
                  "Solubility [mol m^-3 Pa^-0.5]": self.Ks[filename],
                  "Solubility Uncertainty [mol m^-3 Pa^-0.5]": self.Ks_err[filename],
+                 "Sample Composition [H/M]": self.HM[filename],
+                 "Sample Composition Uncertainty [H/M]": self.HM_err[filename],
                  "Proportionality Constant A": self.A[filename],
                  "Additive Time Constant dt [s]": self.dt[filename]
                  }, index=[filename]
                 )])
         self.storage.TransportParameters = df
-        self.storage.PTransportParameters = df
+        self.storage.ATransportParameters = df
 
     def export_data(self):
         """ Loads dataframe containing the information for each material into an Excel sheet """
@@ -643,7 +747,7 @@ class PermeationPlots(tk.Frame):
             save_filename = asksaveasfilename(initialdir=os.path.dirname(__file__), initialfile="test",
                                               defaultextension="*.xlsx")
             if save_filename != '':
-                self.storage.PTransportParameters.to_excel(save_filename)
+                self.storage.ATransportParameters.to_excel(save_filename)
 
         else:
             showerror(message='Please load data first.')
@@ -663,9 +767,9 @@ class PermeationPlots(tk.Frame):
             new_val = float(value) * multi + add
         except ValueError:
             self.error_texts += "Data Extraction Warning. The following was submitted to HyPAT for conversion" + \
-                            " into seconds: " + str(value) + ". This triggered a ValueError. The dataframe " + \
-                            " location corresponding to this term has been set to NaN. No further information" \
-                            " is available.\n\n"
+                                ' into correct units: "' + str(value) + '". This triggered a ValueError. The' + \
+                                " dataframe location corresponding to this term has been set to NaN. No further" \
+                                " information is available.\n\n"
             return float("NaN")
         return new_val
 
@@ -674,7 +778,7 @@ class PermeationPlots(tk.Frame):
         if self.days == -1:  # Equals -1 if this is the first term in the column being loaded. Resets with each file
             self.this_date_time = date_time
             self.init_time = date_time.hour * 3600 + date_time.minute * 60 + date_time.second + \
-                date_time.microsecond * 10 ** -6
+                             date_time.microsecond * 10 ** -6
         last_date_time = self.this_date_time
         self.this_date_time = date_time
         try:
@@ -705,9 +809,9 @@ class PermeationPlots(tk.Frame):
                 self.time_type = 2
             except ValueError:
                 self.error_texts += "Data Extraction Warning. The following was submitted to HyPAT for conversion" + \
-                                " into seconds: " + str(time_term) + ". This triggered a ValueError. The dataframe " + \
-                                " location corresponding to this term has been set to NaN. No further information" \
-                                " is available.\n\n"
+                                ' into seconds: "' + str(time_term) + '". This triggered a ValueError.' + \
+                                " The dataframe location corresponding to this term has been set to NaN." + \
+                                " No further information is available.\n\n"
                 return float("NaN")
         if self.time_type == 1:
             # If the time is in cumulative time passed format, do a linear transform according to multi and add
@@ -717,13 +821,14 @@ class PermeationPlots(tk.Frame):
             return self.get_seconds(time_term)
 
     def get_persistent_vars(self):
-        """ Read data from persistent_permeation_input_variables.xlsx. This data is critical to processing the
+        """ Read data from persistent_absorption_input_variables.xlsx. This data is critical to processing the
             data files loaded in by the user. """
         # Open up the persistent variable file for reading
-        pv_filename = os.path.join('data_files', 'persistent_permeation_input_variables.xlsx')
+        pv_filename = os.path.join('data_files', 'persistent_absorption_input_variables.xlsx')
         pv_wb = openpyxl.load_workbook(pv_filename)
 
-        self.num_GasT = pv_wb['Numbers']['C2'].value  # Number of TCs measuring GasT
+        self.num_GasT0 = pv_wb['Numbers']['C2'].value  # Number of TCs measuring GasT initial
+        self.num_GasT = pv_wb['Numbers']['C3'].value  # Number of TCs measuring GasT after isolation valve is opened
 
         # Reset lists in case this is the second time they are loaded
         self.header = []
@@ -758,27 +863,16 @@ class PermeationPlots(tk.Frame):
             self.SampT_cerr[SampT_inst] = SampT_info[SampT_inst][3]
             self.SampT_perr[SampT_inst] = SampT_info[SampT_inst][4]
 
-        # Primary pressure
-        PrimP_info = pd.read_excel(pv_filename, sheet_name="PrimP", header=0)
-        for PrimP_inst in PrimP_info.keys():
-            self.header.append(PrimP_inst)
-            self.needed_cols.append(self.l2n(PrimP_info[PrimP_inst][0]))
+        # Pressure
+        Pres_info = pd.read_excel(pv_filename, sheet_name="Pres", header=0)
+        for Pres_inst in Pres_info.keys():
+            self.header.append(Pres_inst)
+            self.needed_cols.append(self.l2n(Pres_info[Pres_inst][0]))
             self.converters_dict[self.needed_cols[-1]] = \
-                lambda input, multi=PrimP_info[PrimP_inst][1], add=PrimP_info[PrimP_inst][2]: \
+                lambda input, multi=Pres_info[Pres_inst][1], add=Pres_info[Pres_inst][2]: \
                 self.unit_conversion(input, multi, add)
-            self.PrimP_cerr[PrimP_inst] = PrimP_info[PrimP_inst][3]
-            self.PrimP_perr[PrimP_inst] = PrimP_info[PrimP_inst][4]
-
-        # Secondary pressure
-        SecP_info = pd.read_excel(pv_filename, sheet_name="SecP", header=0)
-        for SecP_inst in SecP_info.keys():
-            self.header.append(SecP_inst)
-            self.needed_cols.append(self.l2n(SecP_info[SecP_inst][0]))
-            self.converters_dict[self.needed_cols[-1]] = \
-                lambda input, multi=SecP_info[SecP_inst][1], add=SecP_info[SecP_inst][2]: \
-                self.unit_conversion(input, multi, add)
-            self.SecP_cerr[SecP_inst] = SecP_info[SecP_inst][3]
-            self.SecP_perr[SecP_inst] = SecP_info[SecP_inst][4]
+            self.Pres_cerr[Pres_inst] = Pres_info[Pres_inst][3]
+            self.Pres_perr[Pres_inst] = Pres_info[Pres_inst][4]
 
         # Isolation Valve shouldn't need more than one instrument, so don't need a for loop. Also don't need uncertainty
         self.header.append("Isolation Valve")
@@ -789,7 +883,7 @@ class PermeationPlots(tk.Frame):
 
         # Variable for which row in Excel sheet to start obtaining data from (0-indexed)
         self.starting_row = pv_wb['MiscInfo']['C2'].value
-        # Variable for how many rows at the end of the Excel sheet to not read (0-indexed)
+        # Variable for how many rows at the end of the Excel sheet to not read
         self.footer_rows = pv_wb['MiscInfo']['D2'].value
 
     def n_of_cols(self, filename):
@@ -838,7 +932,6 @@ class PermeationPlots(tk.Frame):
             num_of_cols = self.n_of_cols(filename)
             while len(set(self.needed_cols)) < len(self.needed_cols) or \
                     not all(x < num_of_cols for x in self.needed_cols):
-
                 # check to make sure all values in the list are less than the length of the Excel sheet
                 # https://www.geeksforgeeks.org/python-check-if-all-the-values-in-a-list-are-less-than-a-given-value/
                 if not all(x < num_of_cols for x in self.needed_cols):
@@ -859,7 +952,7 @@ class PermeationPlots(tk.Frame):
             if not new_pvars:
                 self.get_persistent_vars()
 
-            # Now that the errors are handled, extract the data from the Excel file and load it into a dataframe
+            # Now the errors are handled, extract the data from the Excel file and load it into a dataframe
             if self.file_type == ".xls":
                 Data = pd.read_csv(filename, sep='\t', header=None, usecols=self.needed_cols,
                                    converters=self.converters_dict, skiprows=self.starting_row,
@@ -873,22 +966,20 @@ class PermeationPlots(tk.Frame):
             Data.columns = new_header
 
         n = len(Data)
-        # calculate numerical derivative of secondary pressure
+        # calculate numerical derivative of pressure
         deriv = np.zeros(n)
         for i in range(n - 1):
-            deriv[i] = ((Data.loc[i + 1, 'SecP'] - Data.loc[i, 'SecP']) /
+            deriv[i] = ((Data.loc[i + 1, 'Pres'] - Data.loc[i, 'Pres']) /
                         (Data.loc[i + 1, 't'] - Data.loc[i, 't']))
-        Data['dSecP'] = deriv.tolist()
-
-        # rearrange last two columns so 'SecP' and 'dSecP' are adjacent
+        Data['dPres'] = deriv.tolist()
+        # rearrange last two columns so 'Pres' and 'dPres' are adjacent
         cols = Data.columns.tolist()
         cols = cols[:-2] + [cols[-1]] + [cols[-2]]
         Data = Data[cols]
-
         return Data
 
     def adjust_persistent_vars(self, retry=False):
-        """ Function for calling the window for adjusting persistent variables for loading permeation data,
+        """ Function for calling the window for adjusting persistent variables for loading absorption data,
             then update everything if something was changed """
         loading_warn = True
         if self.loading_data and not retry:
@@ -911,13 +1002,13 @@ class PermeationPlots(tk.Frame):
         # retry = True if adjust_persistent_vars is called but only the persistent variables need to be updated
         # (as opposed to updating the graphs as well)
         if d and retry:
-            self.get_persistent_vars()  # Loads data from the permeation input file-format file
+            self.get_persistent_vars()  # Loads data from the absorption input file-format file
 
-    def adjust_ss_vars(self):
-        """ Function for calling the window for adjusting steady state variables for loading permeation data,
+    def adjust_e_vars(self):
+        """ Function for calling the window for adjusting equilibrium variables for loading absorption data,
             then update everything if desired """
         popup = tk.Toplevel(self)
-        popup.wm_title("Adjust Steady State Variables")
+        popup.wm_title("Adjust Equilibrium Variables")
 
         # Place the popup window near the cursor
         pos_right = self.winfo_pointerx()
@@ -926,28 +1017,28 @@ class PermeationPlots(tk.Frame):
 
         entry_frame = tk.Frame(popup)
         entry_frame.pack(side="left", padx=1)
-        # Tolerance for determining steady state
-        self.add_entry(popup, entry_frame, self.inputs, key="ss_tol",
-                       text="Tolerance for Steady State:", subscript='', units="Pa s\u207b\u00b2",
-                       tvar=self.ss_tol, formatting=True, ent_w=8, in_window=True,
+        # Tolerance for determining equilibrium
+        self.add_entry(popup, entry_frame, self.inputs, key="e_tol",
+                       text="Tolerance for Equilibrium:", subscript='', units="Pa s\u207b\u00b2",
+                       tvar=self.e_tol, formatting=True, ent_w=8, in_window=True,
                        command=lambda tvar, variable, key, formatting, pf:
                        self.storage.check_for_number(tvar, variable, key, formatting, pf))
-        # Minimum time to let pass after t0 before checking for steady state
-        self.add_entry(popup, entry_frame, self.inputs, key="ss_t_del",
-                       text="Delay until Steady State:", subscript='', units="s",
-                       tvar=self.ss_t_del, ent_w=8, row=1, in_window=True,
+        # Minimum time to let pass after t0 before checking for equilibrium
+        self.add_entry(popup, entry_frame, self.inputs, key="e_t_del",
+                       text="Delay until Equilibrium:", subscript='', units="s",
+                       tvar=self.e_t_del, ent_w=8, row=1, in_window=True,
                        command=lambda tvar, variable, key, pf:
                        self.storage.check_for_number(tvar, variable, key, False, pf))  # "false" to say no formatting
-        # Number of data points used in determining the leak
-        self.add_entry(popup, entry_frame, self.inputs, key="leak_range",
-                       text="Leak Range:", subscript='', units="data points",
-                       tvar=self.gen_leak_range, ent_w=8, row=3, in_window=True,
+        # Number of data points used in determining the initial values
+        self.add_entry(popup, entry_frame, self.inputs, key="i_range",
+                       text="Initial Values Range:", subscript='', units="data points",
+                       tvar=self.gen_i_range, ent_w=8, row=3, in_window=True,
                        command=lambda tvar, variable, key, pf:
                        self.storage.check_for_number(tvar, variable, key, False, pf))
-        # Number of data points used in determining the steady state and max time
-        self.add_entry(popup, entry_frame, self.inputs, key="ss_range",
-                       text="Steady State Range:", subscript='', units="data points",
-                       tvar=self.gen_ss_range, ent_w=8, row=4, in_window=True,
+        # Number of data points used in determining the equilibrium and max time and final values
+        self.add_entry(popup, entry_frame, self.inputs, key="e_range",
+                       text="Equilibrium Range:", subscript='', units="data points",
+                       tvar=self.gen_e_range, ent_w=8, row=4, in_window=True,
                        command=lambda tvar, variable, key, pf:
                        self.storage.check_for_number(tvar, variable, key, False, pf))
 
@@ -958,336 +1049,314 @@ class PermeationPlots(tk.Frame):
         b2.grid(row=button_row, column=2, sticky="ew")
 
     def close_and_refresh(self, win):
-        """ Accepts window argument, then closes that window after refreshing the graphs of the Permeation Plots tab """
+        """ Accepts window argument, then closes that window after refreshing the graphs of the Absorption Plots tab """
         self.refresh_graphs()
         win.destroy()
 
-    def get_rates(self, X, Y):
-        """ Calculate rate of change using linear algebra. Calculations taken from
-        https://stackoverflow.com/questions/22381497/python-scikit-learn-linear-model-parameter-standard-error"""
-
-        X = pd.DataFrame(X.values, columns=['X'])
-        y = pd.DataFrame(Y.values, columns=['Y'])
-        # reproduce with linear algebra - will probably just remove scikit after :P
-        N = len(X)
-        p = len(X.columns) + 1  # plus one because LinearRegression adds an intercept term
-
-        X_with_intercept = np.empty(shape=(N, p), dtype=np.float)
-        X_with_intercept[:, 0] = 1
-        X_with_intercept[:, 1:p] = X.values
-
-        beta_hat = np.linalg.inv(X_with_intercept.T @ X_with_intercept) @ X_with_intercept.T @ y.values
-        # order is intercept, then coefficients
-        m = beta_hat[1][0]
-        b = beta_hat[0][0]
-
-        # compute the standard error for the parameter estimates
-        y_hat = np.array(m * X + b)
-
-        residuals = y.values - y_hat
-        residual_sum_of_squares = residuals.T @ residuals
-        sigma_squared_hat = residual_sum_of_squares[0, 0] / (N - p)
-        var_beta_hat = np.linalg.inv(X_with_intercept.T @ X_with_intercept) * sigma_squared_hat
-        err = []
-        for p_ in range(p):
-            standard_error = var_beta_hat[p_, p_] ** 0.5
-            err.append(standard_error)
-
-        return {"slope": m, "slope error": err[1], "intercept": b, "intercept error": err[0]}
-
-    def calculate_permeability(self, filename, data):
-        """ Calculate Permeability using loaded data """
+    def calculate_solubility(self, filename, data):
+        """ Calculate Solubility using loaded data """
         R = self.storage.R * 1000  # J/mol K
+        Vs = self.Vs_cm3.get() * 10 ** (-6)  # m^3
+        Vs_err = self.Vs_cm3_err.get() * 10 ** (-6)  # m^3
+        V_ic = self.Vic_cm3.get() * 10 ** (-6)  # m^3
+        V_ic_err = self.Vic_cm3_err.get() * 10 ** (-6)  # m^3
+        V_sc = self.Vsc_cm3.get() * 10 ** (-6) - Vs  # m^3 Note the correction for the sample's volume
+        V_sc_err = np.sqrt((self.Vsc_cm3_err.get() * 10 ** (-6)) ** 2 + Vs_err ** 2)  # m^3
+        V_totc = V_ic + V_sc  # m^3, total container
+        V_totc_err = np.sqrt(V_ic_err ** 2 + V_sc_err ** 2)  # m^3
 
-        # Set the leak range to the general leak range (which is editable by the user) or to something that works better
-        if self.gen_leak_range.get() < self.t0[filename]:
-            self.leak_range[filename] = self.gen_leak_range.get()
+        # Set the init range to the general init range (which is editable by the user) or to something that works better
+        if self.gen_i_range.get() < self.t0[filename]:
+            self.i_range[filename] = self.gen_i_range.get()
         else:
-            self.leak_range[filename] = self.t0[filename] - 1
-            self.error_texts += "Leak Range Warning with file " + filename + ". The user-input leak range exceeded" + \
-                                " the limit of " + str(self.t0[filename]) + " data points. Leak range set to " + \
-                                str(self.leak_range[filename]) + " data points.\n\n"
-        # Set the ss range to the general ss range (which is editable by the user) or to something that works better
-        if self.gen_ss_range.get() < len(data['dSecP']) - self.t0[filename]:
-            self.ss_range[filename] = self.gen_ss_range.get()
+            self.i_range[filename] = self.t0[filename] - 1
+            self.error_texts += "Initial Range Warning with file " + filename + ". The user-input initial range" + \
+                                " exceeded the limit of " + str(self.t0[filename]) + " data points. Initial range" + \
+                                " set to " + str(self.i_range[filename]) + " data points.\n\n"
+        # Set the eq range to the general eq range (which is editable by the user) or to something that works better
+        if self.gen_e_range.get() < len(data['Pres']) - self.t0[filename]:
+            self.e_range[filename] = self.gen_e_range.get()
         else:
-            self.ss_range[filename] = len(data['dSecP']) - self.t0[filename] - 2
-            self.error_texts += "Steady State Warning with file " + filename + ". The user-input steady state" + \
-                                " range exceeded the limit of " + str(len(data['dSecP']) - self.t0[filename]) + \
-                                " data points. Steady state range set to " + str(self.ss_range[filename]) + \
+            self.e_range[filename] = len(data['Pres']) - self.t0[filename] - 2
+            self.error_texts += "Equilibrium Warning with file " + filename + ". The user-input equilibrium" + \
+                                " range exceeded the limit of " + str(len(data['Pres']) - self.t0[filename]) + \
+                                " data points. Equilibrium range set to " + str(self.e_range[filename]) + \
                                 " data points.\n\n"
 
-        # determine the leak rate. self.leak_range points before opening, not including t0 (note that .loc is inclusive)
-        self.pleak_lf[filename] = \
-            self.get_rates(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 't'],
-                           data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 'SecP'])
-
-        # determine row number when steady state pressure rate is achieved, checking to ensure it is before the end of
+        # determine row number when equilibrium pressure is achieved, checking to ensure it is before the end of
         # the file and after the minimum time delay + t0
-        dSecP = data['dSecP'].rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
-        neg_dSecP = np.where(dSecP < 0)[0]  # List of all terms in dSecP which are less than 0
-        # Minimum terms in a row required to determine if the pressure drop off was reached
-        min_seq = max(self.ss_range[filename] // 2 - 1, 1)
-        ss_time_max = len(dSecP)  # variable to store the last point before experiment ends (and/or pressure drops)
-        #  Find where the pressure drops off because the valve was opened or fail to find such a point
-        for count, value in enumerate(neg_dSecP[:len(neg_dSecP)-min_seq]):
-            if value > self.t0[filename]:  # if the value is late enough
-                # Check for a sequence min_seq long in which neg_dSecP is less than zero
-                if sum(np.diff(neg_dSecP[count:count+min_seq])) <= min_seq:
-                    ss_time_max = neg_dSecP[count]  # set the max time to when the pressure drops
+        dPres = data['dPres'].rolling(window=self.e_range[filename], center=True, min_periods=1).mean()
+        # List of all terms in abs(dPres) which are more than 5e-3 (allowing for a slight change during equilibrium)
+        nonzero_dPres = np.where(abs(dPres) > 5E-3)[0]
+        # Minimum terms in a row required to determine if the pressure drop off or other big change was reached
+        min_seq = max(self.e_range[filename] // 2 - 1, 1)
+        # variable to store the last point before experiment ends (and/or pressure changes and/or isolation valve opens)
+        e_time_max = len(dPres)
+
+        # Check for valve being closed after it was opened and set the max data point accordingly
+        IVclosed = np.where(((self.datafiles[filename])['Isolation Valve'])[self.t0[filename]:] == 0)[0]
+        if IVclosed.any():
+            e_time_max = (IVclosed[0] + self.t0[filename])
+
+        past_change = False
+        #  Find where the pressure changes because a valve was opened or fail to find such a point
+        for count, value in enumerate(nonzero_dPres[:len(nonzero_dPres) - min_seq]):
+            if e_time_max > value > (self.t0[filename]):  # if the value is in the range for looking for equilibrium,
+                # ...check to see if we are past the initial drop in pressure
+                if np.diff(nonzero_dPres[count:count + 2]) > 2 and not past_change:
+                    past_change = True
+                # ...check for a sequence post the initial drop that is min_seq long in which abs(dPres) is >5e-3
+                if sum(np.diff(nonzero_dPres[count:count + min_seq])) <= min_seq and past_change:
+                    e_time_max = nonzero_dPres[count]  # set the max time to when the pressure changes
                     break
 
-        # Convert the user's input time delay into a location in the array of data that doesn't depend on delta t
-        # This line creates an array containing only the locations of times that are eligible to be a steady state
-        ss_del = np.where(data.loc[self.t0[filename]:, 't'] > self.ss_t_del.get() + data.loc[self.t0[filename], 't']
-                          + 0.000001)[0]  # Added .00001 to ensure precision errors don't lead to e_del being 0
+        e_del = np.where(data.loc[self.t0[filename]:, 't'] > self.e_t_del.get() + data.loc[self.t0[filename], 't']
+                         + 0.000001)[0]  # Added .000001 to ensure precision errors don't lead to e_del being 0
         try:
             # Set the time delay to be the minimum number of data points away from t0 that still is further than
             # the user's input time delay
-            ss_del = ss_del[0] - 1  # -1 to compensate for the > sign in e_del's def and in later checks
-        except IndexError:  # This is expected if ss_del is empty
-            # Set ss_del to the largest delay that still works
-            ss_del = ss_time_max - (self.ss_range[filename] + self.t0[filename] + 2)
-            self.error_texts += "Steady State Warning with file " + filename + ". The user-input time delay" + \
+            e_del = e_del[0] - 1  # -1 to compensate for the > sign in e_del's def and in later checks
+        except IndexError:  # This is expected if e_del is empty, generally because self.e_t_del is too long in some way
+            # Set e_del to the largest delay that still works
+            e_del = e_time_max - (self.e_range[filename] + self.t0[filename] + 2)
+            self.error_texts += "Equilibrium Warning with file " + filename + ". The user-input time delay" + \
                                 " exceeded the limit of " + \
-                                str(round(data.loc[ss_time_max - (self.ss_range[filename] + 2), 't'] -
+                                str(round(data.loc[e_time_max - (self.e_range[filename] + 2), 't'] -
                                           data.loc[self.t0[filename], 't'], 3)) + " s. Time delay set to " + \
-                                str(round(data.loc[ss_del + self.t0[filename], 't'] -
+                                str(round(data.loc[e_del + self.t0[filename], 't'] -
                                           data.loc[self.t0[filename], 't'], 3)) + " s.\n\n"
-        if ss_del > ss_time_max - (self.ss_range[filename] + self.t0[filename] + 2):
-            # In case ss_del produces a usable data point but that data point is past an abrupt downturn in pressure
-            ss_del = ss_time_max - (self.ss_range[filename] + self.t0[filename] + 2)
-            self.error_texts += "Steady State Warning with file " + filename + ". The user-input time delay" + \
+        if e_del > e_time_max - (self.e_range[filename] + self.t0[filename] + 2):
+            # In case e_del produces a usable data point but that data point is past an abrupt downturn in pressure or
+            # is past the valve closing,
+            e_del = e_time_max - (self.e_range[filename] + self.t0[filename] + 2)
+            self.error_texts += "Equilibrium Warning with file " + filename + ". The user-input time delay" + \
                                 " exceeded the limit of " + \
-                                str(round(data.loc[ss_time_max - (self.ss_range[filename] + 2), 't'] -
+                                str(round(data.loc[e_time_max - (self.e_range[filename] + 2), 't'] -
                                           data.loc[self.t0[filename], 't'], 3)) + " s. Time delay set to " + \
-                                str(round(data.loc[ss_del + self.t0[filename], 't'] -
+                                str(round(data.loc[e_del + self.t0[filename], 't'] -
                                           data.loc[self.t0[filename], 't'], 3)) + " s.\n\n"
-
         # Find the data point at which an equilibrium is reached
-        ddSecP = pd.Series((dSecP.loc[2:].to_numpy() - dSecP.loc[:len(dSecP) - 3].to_numpy()) /
-                           (data.loc[2:, 't'].to_numpy() - data.loc[:len(dSecP) - 3, 't'].to_numpy()))
-        ddSecP = ddSecP.rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
-        zeros = np.where(abs(ddSecP) < self.ss_tol.get())[0]
-        zeros = [z for z in zeros if self.t0[filename] + ss_del < z < ss_time_max - min_seq - 2]
-        # If no steady state was found with the user-input tolerance, loop until find a steady state using new_ss_tol
-        new_ss_tol = self.ss_tol.get()
-        while not zeros and new_ss_tol < self.ss_tol.get() * 100000:
-            new_ss_tol = float("{:.2e}".format(new_ss_tol * 5))
-            zeros = np.where(abs(ddSecP) < new_ss_tol)[0]
-            zeros = [z for z in zeros if self.t0[filename] + ss_del < z < ss_time_max - min_seq - 2]
-        if new_ss_tol != self.ss_tol.get() and zeros:
-            self.error_texts += "Steady State Warning with file " + filename + ". HyPAT was unable to find a steady" + \
-                                " state using the user-input tolerance " + str(self.ss_tol.get()) + \
-                                ". New tolerance was set to {:.2e}".format(new_ss_tol) + \
-                                ", which successfully determined a time for the beginning of the steady state.\n\n"
-        elif new_ss_tol != self.ss_tol.get():
-            zeros = [min(self.t0[filename] + ss_del + 1, ss_time_max - min_seq - 3)]
-            self.error_texts += "Steady State Error with file " + filename + \
-                                ". HyPAT was unable to find steady state using the user-input tolerance " + \
-                                str(self.ss_tol.get()) + " or the computationally set tolerance " + \
-                                "{:.2e}".format(new_ss_tol) + ". Steady state time was set to " + \
+        ddPres = pd.Series((dPres.loc[2:].to_numpy() - dPres.loc[:len(dPres) - 3].to_numpy()) /
+                           (data.loc[2:, 't'].to_numpy() - data.loc[:len(dPres) - 3, 't'].to_numpy()))
+        ddPres = ddPres.rolling(window=self.e_range[filename], center=True, min_periods=1).mean()
+        zeros = np.where(abs(ddPres) < self.e_tol.get())[0]  # Find points where ddPres is approximately zero
+        zeros = [z for z in zeros if self.t0[filename] + e_del < z < e_time_max - min_seq - 2]
+        # If no equilibrium was found with the user-input tolerance, loop until find an equilibrium using new_e_tol
+        new_e_tol = self.e_tol.get()
+        while not zeros and new_e_tol < self.e_tol.get() * 100000:
+            new_e_tol = float("{:.2e}".format(new_e_tol * 5))
+            zeros = np.where(abs(ddPres) < new_e_tol)[0]
+            zeros = [z for z in zeros if self.t0[filename] + e_del < z < e_time_max - min_seq - 2]
+        if new_e_tol != self.e_tol.get() and zeros:
+            self.error_texts += "Equilibrium Warning with file " + filename + ". HyPAT was unable to find an" + \
+                                " equilibrium using the user-input tolerance " + str(self.e_tol.get()) + \
+                                ". New tolerance was set to {:.2e}".format(new_e_tol) + \
+                                ", which successfully determined a time for the beginning of the equilibrium.\n\n"
+        elif new_e_tol != self.e_tol.get():
+            zeros = [min(self.t0[filename] + e_del + 1, e_time_max - min_seq - 3)]  # Added a +1 because e_del can be zero now, so this forces t_e != t0
+            self.error_texts += "Equilibrium Error with file " + filename + \
+                                ". HyPAT was unable to find equilibrium using the user-input tolerance " + \
+                                str(self.e_tol.get()) + " or the computationally set tolerance " + \
+                                "{:.2e}".format(new_e_tol) + ". Equilibrium time was set to " + \
                                 str(round(data.loc[zeros[0], 't'], 3)) + \
                                 " s, which is equal to either the starting time plus the user-input" + \
-                                " time delay until steady state or the maximum usable time, whichever is lower.\n\n"
-        # Set steady state time
-        self.tss[filename] = zeros[0]
+                                " time delay until equilibrium or the maximum usable time, whichever is lower.\n\n"
+        self.t_e[filename] = zeros[0]
 
-        # determine steady state permeation rates
-        self.pss_lf[filename] = self.get_rates(data.loc[self.tss[filename] + 1:
-                                                        self.tss[filename] + self.ss_range[filename], 't'],
-                                               data.loc[self.tss[filename] + 1:
-                                                        self.tss[filename] + self.ss_range[filename], 'SecP'])
-        self.Prate[filename] = self.pss_lf[filename]["slope"] - self.pleak_lf[filename]["slope"]  # Pa/s
-
-        # Get the temperature using an average of arbitrarily many TCs
-        Tg_vals = pd.DataFrame()
-        for i in range(1, self.num_GasT + 1):
-            Tg_vals['GasT' + str(i)] = data.loc[:, 'GasT' + str(i)]
-        self.Tg_mean = Tg_vals.mean(axis=1)
-        # Average initial temperature and average steady state temperature
-        self.Tg0[filename] = self.Tg_mean.loc[self.t0[filename] - self.leak_range[filename]:
-                                              self.t0[filename] - 1].mean() + self.storage.standard_temp  # K
-        self.Tgss[filename] = \
-            self.Tg_mean.loc[self.tss[filename] + 1:self.tss[filename] + self.ss_range[filename]].mean() + \
+        # Get the initial gas temperature using an average of arbitrarily many TCs
+        Tg_ivals = pd.DataFrame()
+        for i in range(1, self.num_GasT0 + 1):
+            Tg_ivals['GasT' + str(i)] = data.loc[:, 'GasT' + str(i)]
+        Tg_imean = Tg_ivals.mean(axis=1)
+        self.Tg0[filename] = Tg_imean.loc[self.t0[filename] - self.i_range[filename]:self.t0[filename] - 1].mean() + \
             self.storage.standard_temp  # K
+        # Get the equilibrium gas temperature using an average of arbitrarily many TCs
+        Tg_fvals = pd.DataFrame()
+        for i in range(1, self.num_GasT + 1):
+            Tg_fvals['GasT' + str(i)] = data.loc[:, 'GasT' + str(i)]
+        Tg_fmean = Tg_fvals.mean(axis=1)
+        self.Tg_e[filename] = Tg_fmean.loc[self.t_e[filename] + 1:self.t_e[filename] +
+                                           self.e_range[filename]].mean() + self.storage.standard_temp  # K
 
-        # convert to molar flow rate mol/s using ideal gas law
-        Nrate = (self.pss_lf[filename]["slope"] * self.volume.get()) / (R * self.Tgss[filename]) - \
-                (self.pleak_lf[filename]["slope"] * self.volume.get()) / (R * self.Tg0[filename])
-        # convert to molar flux
-        self.F[filename] = Nrate / self.A_perm.get()
+        # calculate average pressures
+        self.pr0_avg[filename] = \
+            data.loc[self.t0[filename] - self.i_range[filename]:self.t0[filename] - 1, 'Pres'].mean()
+        self.pr_e_avg[filename] = \
+            data.loc[self.t_e[filename] + 1: self.t_e[filename] + self.e_range[filename], 'Pres'].mean()
 
-        # calculate permeability
-        self.SecP_average[filename] = data.loc[self.tss[filename] + 1:
-                                               self.tss[filename] + self.ss_range[filename], 'SecP'].mean()
-        self.PrimP_average[filename] = data.loc[self.tss[filename] + 1:
-                                                self.tss[filename] + self.ss_range[filename], 'PrimP'].mean()
+        # Obtain values from previous pressure for calculations
+        if self.exp_type.get() == "Isotherm" and filename[-1] != "1":
+            # Get the filename of the previous pressure
+            pressure_number = str(int(filename[-1]) - 1)
+            last_filename = filename[:-1] + pressure_number
+            # Get info on number of moles absorbed in the sample previously
+            self.ns0[filename] = self.ns_e[last_filename]  # Initial number of moles in sample at t0
+            self.ns0_err[filename] = self.ns_e_err[last_filename]
+            # Calculate number of moles in sample container when isolation valve is closed
+            pr_sc0 = self.pr_e_avg[last_filename]  # Initial pressure in sample container
+            pr_sc0_err = self.pr_e_err[last_filename]
+            T_sc0 = self.Tg_e[last_filename]   # Initial temperature in sample container
+            T_sc0_err = self.Tg_e_err[last_filename]
+            n_sc0 = pr_sc0 * V_sc / R / T_sc0  # Initial number of moles in sample container
+            n_sc0_err = abs(n_sc0) * np.sqrt((pr_sc0_err / pr_sc0) ** 2 + (T_sc0_err / T_sc0) ** 2 +
+                                             (V_sc_err / V_sc) ** 2)
+        else:
+            #  Assume there weren't previous experiments
+            self.ns0[filename] = 0  # Initial number of moles in sample
+            self.ns0_err[filename] = 0
+            n_sc0 = 0  # Initial number of moles in sample container
+            n_sc0_err = 0
 
-        sl = self.sample_thickness.get() * 0.001  # converted to meters
-        sl_err = self.sample_thickness_err.get() * 0.001  # converted to meters
-        self.Phi[filename] = self.F[filename] * sl / (np.sqrt(self.PrimP_average[filename]) -
-                                                      np.sqrt(self.SecP_average[filename]))
+        # calculate moles
+        n_ci0 = self.pr0_avg[filename] * V_ic / R / self.Tg0[filename]  # Initial number of moles in initial container
+        nc0 = n_ci0 + n_sc0  # Total number of moles at start
+        nc_e = self.pr_e_avg[filename] * V_totc / R / self.Tg_e[filename]
+        self.ns_e[filename] = nc0 - nc_e + self.ns0[filename]
 
-        # Calculate the uncertainty in permeability
-        # We need uncertainty from the following: sl, SecP, PrimP, A_perm, pss_lf[slope], pleak_lf[slope], V, Tgss, Tg0
+        # Pressure as a function of time (Pa)
+        pr_t = data.loc[self.t0[filename] + 1:self.t_e[filename] + self.e_range[filename], 'Pres'].to_numpy()
+        # Moles in the sample as a function of time (mol)
+        self.ns_t[filename] = nc0 - pr_t * V_totc / R / \
+            (Tg_fmean.loc[self.t0[filename] + 1:self.t_e[filename] + self.e_range[filename]].to_numpy()
+             + self.storage.standard_temp) + self.ns0[filename]
+
+        # calculate solubility
+        self.Ks[filename] = self.ns_e[filename] / Vs / np.sqrt(self.pr_e_avg[filename])
+
+        # Calculate the uncertainty in solubility
 
         # Find uncertainty of Tg0 when there are arbitrarily many TCs
         Tg0_errs = []
-        for i in range(1, self.num_GasT + 1):
-            Tg0_errs.append((max(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1,
-                                 'GasT' + str(i)].std(), self.GasT_cerr['GasT' + str(i)],
+        for i in range(1, self.num_GasT0 + 1):
+            Tg0_errs.append((max(data.loc[self.t0[filename] - self.i_range[filename]:self.t0[filename] - 1, 'GasT' + str(i)].std(),
+                                 self.GasT_cerr['GasT' + str(i)],
                                  (self.Tg0[filename] - self.storage.standard_temp) *
                                  self.GasT_perr['GasT' + str(i)] / 100)) ** 2)
-        Tg0_err = np.sqrt(sum(Tg0_errs)) / self.num_GasT
-        # Find uncertainty of Tgss when there are arbitrarily many TCs
-        Tgss_errs = []
+        Tg0_err = np.sqrt(sum(Tg0_errs)) / self.num_GasT0
+        # Find uncertainty of Tg_e when there are arbitrarily many TCs
+        Tge_errs = []
         for i in range(1, self.num_GasT + 1):
-            Tgss_errs.append((max(data.loc[self.tss[filename] + 1:self.tss[filename] + self.ss_range[filename],
-                                  'GasT' + str(i)].std(), self.GasT_cerr['GasT' + str(i)],
-                                  (self.Tgss[filename] - self.storage.standard_temp) *
-                                  self.GasT_perr['GasT' + str(i)] / 100)) ** 2)
-        Tgss_err = np.sqrt(sum(Tgss_errs)) / self.num_GasT
+            Tge_errs.append((max(data.loc[self.t_e[filename] + 1:self.t_e[filename] + self.e_range[filename], 'GasT' + str(i)].std(),
+                                 self.GasT_cerr['GasT' + str(i)],
+                                 (self.Tg_e[filename] - self.storage.standard_temp) *
+                                 self.GasT_perr['GasT' + str(i)] / 100)) ** 2)
+        Tge_err = np.sqrt(sum(Tge_errs)) / self.num_GasT
 
-        # Pressure uncertainty
-        SecP_err = max(data.loc[self.tss[filename] + 1:self.tss[filename] + self.ss_range[filename], 'SecP'].std(),
-                       self.SecP_cerr["SecP"], self.SecP_average[filename] * self.SecP_perr["SecP"] / 100)
-        PrimP_err = max(data.loc[self.tss[filename] + 1:self.tss[filename] + self.ss_range[filename], 'PrimP'].std(),
-                        self.PrimP_cerr["PrimP"], self.PrimP_average[filename] * self.PrimP_perr["PrimP"] / 100)
+        # Pressure uncertainties
+        Pres0_err = max(data.loc[self.t0[filename] - self.i_range[filename]:self.t0[filename] - 1, 'Pres'].std(),
+                        self.Pres_cerr["Pres"], self.pr0_avg[filename] * self.Pres_perr["Pres"] / 100)
+        Pres_e_err = max(data.loc[self.t_e[filename] + 1:self.t_e[filename] + self.e_range[filename], 'Pres'].std(),
+                         self.Pres_cerr["Pres"], self.pr_e_avg[filename] * self.Pres_perr["Pres"] / 100)
+        # Moles uncertainties
+        n_ci0_err = abs(nc0) * np.sqrt((Pres0_err / self.pr0_avg[filename]) ** 2 + (V_ic_err / V_ic) ** 2 +
+                                     (Tg0_err / self.Tg0[filename]) ** 2)
+        nc0_err = np.sqrt(n_ci0_err ** 2 + n_sc0_err ** 2)
+        nce_err = abs(nc_e) * np.sqrt((Pres_e_err / self.pr_e_avg[filename]) ** 2 + (V_totc_err / V_totc) ** 2 +
+                                      (Tge_err / self.Tg_e[filename]) ** 2)
+        nse_err = np.sqrt(nc0_err ** 2 + nce_err ** 2 + self.ns0_err[filename] ** 2)
 
-        # Rate uncertainty
-        Prate_err = np.sqrt(self.pss_lf[filename]['slope error'] ** 2 + self.pleak_lf[filename]['slope error'] ** 2)
-        Nrate_err = 1 / R * np.sqrt((abs(self.pss_lf[filename]['slope'] * self.volume.get() / self.Tgss[filename]) *
-                                     np.sqrt((self.pss_lf[filename]['slope error'] / self.pss_lf[filename]['slope']) ** 2 +
-                                             (Tgss_err / self.Tgss[filename]) ** 2 +
-                                             (self.volume_err.get() / self.volume.get()) ** 2)
-                                     ) ** 2 +
-                                    (abs(self.pleak_lf[filename]['slope'] * self.volume.get() / self.Tg0[filename]) *
-                                     np.sqrt((self.pleak_lf[filename]['slope error'] / self.pleak_lf[filename]['slope']) ** 2 +
-                                             (Tg0_err / self.Tg0[filename]) ** 2 +
-                                             (self.volume_err.get() / self.volume.get()) ** 2)
-                                     ) ** 2
-                                    )  # self.volume could get pulled out front, but hasn't been to ease comprehension
+        # Solubility uncertainty
+        self.Ks_err[filename] = abs(self.Ks[filename]) * np.sqrt(
+            (nse_err / self.ns_e[filename]) ** 2 + (Vs_err / Vs) ** 2 + (Pres_e_err / 2 / self.pr_e_avg[filename]) ** 2)
 
-        # Final results
-        F_err = abs(Nrate/self.A_perm.get())*np.sqrt((Nrate_err/Nrate) ** 2 +
-                                                     (self.A_perm_err.get() / self.A_perm.get()) ** 2)
-        Phi_err = self.Phi[filename] * np.sqrt((F_err / self.F[filename]) ** 2 + (sl_err/sl) ** 2 +
-                                               (np.sqrt(
-                                                   (SecP_err / (2 * np.sqrt(self.SecP_average[filename]))) ** 2 +
-                                                   (PrimP_err / (2 * np.sqrt(self.PrimP_average[filename]))) ** 2) /
-                                                        (np.sqrt(self.PrimP_average[filename]) - np.sqrt(
-                                                            self.SecP_average[filename]))
-                                                ) ** 2
-                                               )
+        # Uncomment to have a data file created at the end of processing. You can also change this df to match your need
+        # self.troubleshooting_df = pd.concat([self.troubleshooting_df, pd.DataFrame(
+        #         {"index": filename[-1],
+        #          "Ks": self.Ks[filename],
+        #          "Ks_err": self.Ks_err[filename],
+        #          "Ks_err/Ks": self.Ks_err[filename]/self.Ks[filename],
+        #          "nse": self.ns_e[filename],
+        #          "nse_err": nse_err,
+        #          "nc0": nc0,
+        #          "nc0_err**2": nc0_err**2,
+        #          "nc_e": nc_e,
+        #          "nce_err**2": nce_err**2,
+        #          "pr0_avg": self.pr0_avg[filename],
+        #          "Pres0_err": Pres0_err,
+        #          "(Pres0_err/pr0_avg) ** 2": (Pres0_err / self.pr0_avg[filename]) ** 2,
+        #          "pr_e_avg": self.pr_e_avg[filename],
+        #          "Pres_e_err": Pres_e_err,
+        #          "(Pres_e_err/pr_e_avg) ** 2": (Pres_e_err / self.pr_e_avg[filename]) ** 2
+        #          }, index=[filename]
+        #     )])
 
-        # store uncertainties
-        self.Prate_err[filename] = Prate_err
-        self.Phi_err[filename] = Phi_err
-        self.F_err[filename] = F_err
-        self.Tgss_err[filename] = Tgss_err
-        self.SecP_err[filename] = SecP_err
-        self.PrimP_err[filename] = PrimP_err
+        # Store uncertainties
+        self.ns_e_err[filename] = nse_err
+        self.Tg_e_err[filename] = Tge_err
+        self.pr_e_err[filename] = Pres_e_err
 
-        # Data for permeability vs. time graph
-        self.Perm_Plot[filename] = ((dSecP - self.pleak_lf[filename]["slope"]) * self.volume.get() * sl) / \
-                                   (((data['PrimP']) ** 0.5 - (
-                                                        data['SecP']) ** 0.5) * R * (
-                                                        self.Tg_mean + self.storage.standard_temp) * self.A_perm.get())
+        # Data for pressure vs. composition graph
+        NA = self.storage.Na  # number of atoms per mole, the Avogadro constant
+        a_num = self.ms_g.get() * NA / self.molar_mass.get()  # number of atoms of metal
+        H_num = 2 * self.ns_e[filename] * NA  # Number of Hydrogen atoms in the sample
+        self.HM[filename] = H_num / a_num  # Hydrogen to metal atoms ratio
+        self.HM_err[filename] = abs(self.HM[filename]) * np.sqrt((self.ms_g_err.get()/self.ms_g.get()) ** 2 +
+                                                                 (nse_err / self.ns_e[filename]) ** 2)
 
-        # get temp from sample TC
-        self.Tsamp0[filename] = data.loc[self.t0[filename] - self.leak_range[filename]:
-                                         self.t0[filename] - 1, 'SampT'].mean() + self.storage.standard_temp
-        self.Tsampss[filename] = data.loc[self.tss[filename] + 1:
-                                          self.tss[filename] + self.ss_range[filename], 'SampT'].mean() + \
+        # Uncomment to have a data file created at the end of processing. You can also change this df to match your need
+        # self.troubleshooting_df = pd.concat(
+        #     [self.troubleshooting_df, pd.DataFrame(
+        #         {"index": filename[-1],
+        #          "HM": self.HM[filename],
+        #          "HM_err": self.HM_err[filename],
+        #          "HM_err/HM": self.HM_err[filename] / self.HM[filename],
+        #          "ns_e": self.ns_e[filename],
+        #          "nse_err": nse_err,
+        #          "(nse_err/ns_e)**2": (nse_err / self.ns_e[filename]) ** 2,
+        #          }, index=[filename]
+        #     )])
+
+        # Get temp from sample TC
+        self.Ts0[filename] = data.loc[self.t0[filename] - self.i_range[filename]:self.t0[filename] - 1, 'SampT'].mean() + \
             self.storage.standard_temp
-        self.Tsampss_err[filename] = max(data.loc[self.tss[filename] + 1:
-                                                  self.tss[filename] + self.ss_range[filename], 'SampT'].std(),
-                                         self.SampT_cerr["SampT"],
-                                         self.Tsampss[filename] * self.SampT_perr["SampT"] / 100)
+        self.Ts_e[filename] = data.loc[self.t_e[filename] + 1:self.t_e[filename] + self.e_range[filename], 'SampT'].mean() + \
+            self.storage.standard_temp
+        self.Ts_e_err[filename] = max(data.loc[self.t_e[filename] + 1:self.t_e[filename] + self.e_range[filename], 'SampT'].std(),
+                                      self.SampT_cerr["SampT"], self.Ts_e[filename] * self.SampT_perr["SampT"] / 100)
 
     def calculate_diffusivity(self, filename, data):
         """ Calculate Diffusivity using loaded data """
         debug = False
-        R = self.storage.R * 1000  # J/mol K
 
-        # Prep for the time-lag method
-        x_intercept = (self.pss_lf[filename]["intercept"] - self.pleak_lf[filename]["intercept"]) / \
-                      (self.pleak_lf[filename]["slope"] - self.pss_lf[filename]["slope"])
-        y_intercept = self.pleak_lf[filename]["slope"] * x_intercept + self.pleak_lf[filename]["intercept"]
-        self.intercept[filename] = (x_intercept, y_intercept)
-        self.tlag[filename] = x_intercept - data.loc[self.t0[filename], 't']
-        if self.tlag[filename] < 0:
-            self.error_texts += "Time-Lag Error with file " + filename + ". A negative time-lag was calculated. " + \
-                                "Diffusivity will not be calculated for this file.\n\n"
-            skipD = True
-        else:
-            skipD = False
-
-        # calculate diffusivity using time-lag method
+        # Prepare for analysis
         sl = self.sample_thickness.get() * 0.001  # converted to meters
-        D = sl ** 2 / (6 * self.tlag[filename])
-        if skipD:  # If skipping the calculations of D
-            D = float("NaN")
-
-        # Prepare for optimization
-        Jt = data.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename], 'dSecP'].to_numpy() * \
-            self.volume.get() / \
-            (R * (self.Tg_mean.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename]].to_numpy() +
-                  self.storage.standard_temp) * self.A_perm.get())
-        self.D_time[filename] = data.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename], 't'] - \
-            data.loc[self.t0[filename], 't']
-        J0 = np.mean(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 'dSecP']) * \
-            self.volume.get() / (R * self.Tg0[filename] * self.A_perm.get())  # leak rate
-        Jinf = np.mean(data.loc[self.tss[filename] + 1:
-                                self.tss[filename] + self.ss_range[filename], 'dSecP'].to_numpy()) * \
-            self.volume.get() / (R * self.Tgss[filename] * self.A_perm.get())  # steady state flow rate
-
-        if debug:
-            # checking some numbers
-            print('\n', filename)
-            print("mean:", np.mean(data.loc[self.t0[filename] - self.leak_range[filename]:
-                                            self.t0[filename] - 1, 'dSecP']))
-            print("leak rate:", self.pleak_lf[filename]["slope"])
-            print("max:", np.max(Jt))  # large in 1505
-            print("Steady State Rate:", self.pss_lf[filename]["slope"])
-            print("Diffusivity guess:", D)
-
-        # before optimizing
-        self.lhs[filename] = (Jt - J0) / (Jinf - J0)
-        self.rhs[filename] = 1 + 2 * sum(
-            [(-1) ** n * np.exp(-D * n ** 2 * np.pi ** 2 * self.D_time[filename] / sl ** 2) for n in range(1, 20)])
-        if debug:
-            plt.figure()
-            plt.plot(self.lhs[filename][1:], label='lhs')
-            plt.plot(self.rhs[filename][1:], label='rhs')
-            plt.title(filename+" before optimizing")
-            plt.legend()
-
-            plt.figure(filename)
-            plt.plot(self.rhs[filename][1:], label='no optimization')
-            plt.plot(self.lhs[filename][1:], label='lhs')
-            plt.show()
-
-        # optimizing using curve fit - should just be a wrapper around least squares
-
+        sl_err = self.sample_thickness_err.get() * 0.001  # converted to meters  # todo Find a way to use this
+        self.D_time[filename] = data.loc[self.t0[filename] + 1:self.t_e[filename] + self.e_range[filename], 't'] - \
+                                data.loc[self.t0[filename], 't']
         h = data.loc[1, 't'] - data.loc[0, 't']
 
+        # Prepare data for fitting
+        self.lhs[filename] = (self.ns_t[filename] - self.ns0[filename]) / (self.ns_e[filename] - self.ns0[filename])
+
+        # Calculate D without fitting for an initial guess. Source: Crank, pg238-239
+        halfway_point = int(np.argmin(abs(self.lhs[filename] - 0.5)))
+        if halfway_point == 1:
+            self.error_texts += "Curve Fit Warning with file " + filename + \
+                                ". Half of the total absorbed hydrogen was absorbed after roughly one time step" + \
+                                ". The time step may be too large to calculate the diffusivity accurately.\n\n"
+        elif halfway_point < 1:
+            halfway_point = 1
+            self.error_texts += "Curve Fit Warning with file " + filename + \
+                                ". Half of the total absorbed hydrogen was absorbed after less than one time step" + \
+                                ". The time step may be too large to calculate the diffusivity accurately.\n\n"
+        halfway_t = self.D_time[filename][halfway_point + self.t0[filename] + 1]  # +t0+1 because of indexing
+        prop_const = -np.log(np.pi ** 2 / 16 - (1 / 9)*(np.pi ** 2 / 16) ** 9) / np.pi ** 2  # Proportionality constant
+        D = prop_const * sl ** 2 / halfway_t  # Initial guess for diffusivity
+        self.rhs[filename] = 1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) * np.exp(
+            -D * (2 * n + 1) ** 2 * np.pi ** 2 * (self.D_time[filename]) /
+            (4 * (sl / 2) ** 2)) for n in range(0, 20)])
+
+        # Function for optimizing D using curve fit
         def f(xdata, D_opt, dt_opt, A_opt):
-            # Function for optimizing D using curve fit
-            rhs = 1 + 2 * sum(
-                [(-1) ** n * np.exp(-D_opt * n ** 2 * np.pi ** 2 * (xdata + dt_opt) / sl ** 2) for n in range(1, 20)])
+            rhs = 1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) *
+                           np.exp(-D_opt * (2 * n + 1) ** 2 * np.pi ** 2 * (xdata + dt_opt) / (4 * (sl / 2) ** 2))
+                           for n in range(0, 20)])  # sl/2 because the book's equation goes from -l to l, not 0 to l
             return rhs * A_opt
-        # Attempt to optimize D using curve fit and the above function. Show a warning if it fails due to RuntimeError
-        try:
-            if not skipD:  # If not skipping the calculation of D
-                # todo look into making this a weighted curve fit
-                popt, pcov = curve_fit(f, self.D_time[filename], self.lhs[filename], p0=[D, 0, 1], xtol=D * 1e-3,
-                                       bounds=([0, -min(self.D_time[filename]), -1000], [10, 10*h, 1000]))
-            else:
-                NaN = float("NaN")
-                popt = [NaN, NaN, NaN]
-                pcov = np.array([[NaN, NaN, NaN], [NaN, NaN, NaN], [NaN, NaN, NaN]])
+
+        # Attempt to optimize D using curve fit and the above function. Show a warning if it fails
+        try:  # todo look into making this a weighted curve fit
+            popt, pcov = curve_fit(f, self.D_time[filename], self.lhs[filename], p0=[D, 0, 1], xtol=D*1e-3,
+                                   bounds=([0, -min(self.D_time[filename]), -1000], [10, 10*h, 1000]))
         except RuntimeError:
             self.error_texts += "Curve Fit Error with file " + filename + \
                                 ". Curve fit unable to find optimal diffusivity parameters.\n\n"
@@ -1296,41 +1365,43 @@ class PermeationPlots(tk.Frame):
             pcov = np.array([[NaN, NaN, NaN], [NaN, NaN, NaN], [NaN, NaN, NaN]])
         except OptimizeWarning:
             self.error_texts += "Curve Fit Warning with file " + filename + \
-                                ". Curve fit unable to find covariance of the diffusivity parameters. D has been" + \
-                                " set to the diffusivity calculated by the time-lag method.\n\n"
+                                ". Curve fit unable to find covariance of the diffusivity parameters.\n\n"
             NaN = float("NaN")
             popt = [D, 0, 1]
             pcov = np.array([[NaN, NaN, NaN], [NaN, NaN, NaN], [NaN, NaN, NaN]])
+        # Get calculated uncertainty
         perr = np.sqrt(np.diag(pcov))
         self.D_err[filename] = perr[0]
-        # Store D, dt, A, and rhs_cf for use elsewhere in program
-        self.D[filename], self.dt[filename], self.A[filename] = popt
-        self.rhs_cf[filename] = self.A[filename] * (1 + 2 * sum(
-            [(-1) ** n * np.exp(-self.D[filename] * n ** 2 * np.pi ** 2 * (self.D_time[filename] + self.dt[filename]) /
-                                sl ** 2) for n in range(1, 20)]))
+
         if debug:
-            lhs = A * (Jt - J0) / (Jinf - J0)
+            print('\n', filename)
+            print("New D, dt, A:", popt)
+            print('pcov:\n', pcov)
+            print("perr:", perr)
+
+        # Store D, dt, A and rhs_cf for use elsewhere in program
+        self.D[filename], self.dt[filename], self.A[filename] = popt
+        self.rhs_cf[filename] = self.A[filename] * (1 - sum([(8 / ((2 * n + 1) ** 2 * np.pi ** 2)) * np.exp(
+            -self.D[filename] * (2 * n + 1) ** 2 * np.pi ** 2 * (self.D_time[filename] + self.dt[filename]) /
+            (4 * (sl / 2) ** 2)) for n in range(0, 20)]))
+
+        if debug:
             plt.figure()
-            plt.plot(lhs[1:], label='lhs')
-            plt.plot(self.rhs_cf[filename][1:], label='rhs')
+            plt.plot(self.lhs[filename][1:], label='lhs')
+            plt.plot(np.array(self.rhs_cf[filename][1:]), label='rhs')
             plt.title(filename + " curve fit")
             plt.legend()
+            plt.show()
 
-            # compare the optimized lines
-            plt.figure(filename)
-            plt.plot(self.rhs_cf[filename][1:], '--', label='curve fit')
-            plt.title("comparison")
-            plt.legend()
-
-    def calculate_solubility(self, filename, data):
-        """ Calculate Solubility using calculated Diffusivity and Permeability """
-        self.Ks[filename] = self.Phi[filename]/self.D[filename]
+    def calculate_permeability(self, filename, data):
+        """ Calculate Permeability using calculated Solubility and Diffusivity """
+        self.Phi[filename] = self.D[filename] * self.Ks[filename]
         # get the uncertainty
-        self.Ks_err[filename] = self.Ks[filename] * np.sqrt(
-            (self.Phi_err[filename]/self.Phi[filename])**2 + (self.D_err[filename]/self.D[filename])**2)
+        self.Phi_err[filename] = self.Phi[filename] * np.sqrt(
+            (self.Ks_err[filename] / self.Ks[filename]) ** 2 + (self.D_err[filename] / self.D[filename]) ** 2)
 
     def generate_plots(self, *args):
-        """ Create the permeation tab plots """
+        """ Create the absorption tab plots """
         filename = self.current_file.get()
         if self.current_file.get() == "No files yet":
             return
@@ -1342,17 +1413,16 @@ class PermeationPlots(tk.Frame):
         self.ax1.clear()
         self.ax12.clear()
         self.ax2.clear()
-        self.ax22.clear()
         self.ax3.clear()
 
-        # Permeability/Diffusivity/Solubility vs. Temperature and Flux vs. Pressure (bottom left graph)
+        # Permeability/Diffusivity/Solubility vs. Temperature (bottom left graph)
         self.PDK_plot(self.ax)
 
         # Pressure vs. Time (top right graph)
         self.pressure_time_plot(data, filename, self.fig1, self.ax1, self.ax12)
 
-        # Permeation vs. Time (bottom middle graph)
-        self.perm_time_plot(data, filename, self.fig2, self.ax2, self.ax22)
+        # Pressure vs. Composition (bottom middle graph) (color coded by temperature)
+        self.pres_comp_temp_plot(self.fig2, self.ax2)
 
         # Diffusivity comparison plots for optimization (bottom right graph)
         self.comparison_plot(filename, self.ax3)
@@ -1367,16 +1437,27 @@ class PermeationPlots(tk.Frame):
         self.toolbar3.update()
 
         # update labels
+        self.pr_e_label.set(self.pr_e_avg[filename])
+        self.ns_e_label.set(self.ns_e[filename])
+        self.eq_t_label.set(data.loc[self.t_e[filename], 't'] - data.loc[self.t0[filename], 't'])
         self.Phi_label.set(self.Phi[filename])
-        self.Prate_label.set(self.Prate[filename])
-        self.F_label.set(self.F[filename])
         self.D_label.set(self.D[filename])
         self.K_label.set(self.Ks[filename])
+        self.pr_e_err_label.set(self.pr_e_err[filename])
+        self.ns_e_err_label.set(self.ns_e_err[filename])
+        # todo The following error assumes 1 sigma of confidence that t0 and t_e are within one data point of the
+        #      correct value for t0 or t_e, respectively. A better estimate may be needed.
+        t0_s_err = (data.loc[self.t0[filename] + 1, 't'] - data.loc[self.t0[filename] - 1, 't']) / 2
+        te_s_err = (data.loc[self.t_e[filename] + 1, 't'] - data.loc[self.t_e[filename] - 1, 't']) / 2
+        self.eq_t_err_label.set(np.sqrt(t0_s_err ** 2 + te_s_err ** 2))
         self.Phi_err_label.set(self.Phi_err[filename])
-        self.Prate_err_label.set(self.Prate_err[filename])
-        self.F_err_label.set(self.F_err[filename])
         self.D_err_label.set(self.D_err[filename])
         self.K_err_label.set(self.Ks_err[filename])
+        if self.exp_type.get() == "Isotherm":
+            fname = (filename.rsplit(maxsplit=1))[0]  # Remove the " p#_" by removing info after a whitespace
+        else:
+            fname = filename
+        self.p_num_label.set(self.p_num[fname])
 
     def update_PDK_plot(self, *args):
         """ Clear and replot the bottom left (PDK) plot """
@@ -1389,6 +1470,7 @@ class PermeationPlots(tk.Frame):
 
     def popout_plot(self, ax):
         """ creates the selected plot using the regular popout from matplotlib """
+
         if self.loading_data:
             proceed = tk.messagebox.askyesno(title="Loading Data",
                                              message="Warning: Data is currently loading. Proceeding may cause " +
@@ -1415,10 +1497,9 @@ class PermeationPlots(tk.Frame):
                 self.pressure_time_plot(data, filename, fig, ax1, ax12)
 
             elif plot == self.ax2_title:
-                # Permeation vs. Time
+                # Pressure vs. Composition
                 fig, ax2 = plt.subplots(layout="constrained")
-                ax22 = ax2.twinx()
-                self.perm_time_plot(data, filename, fig, ax2, ax22)
+                self.pres_comp_temp_plot(fig, ax2)
 
             elif plot == self.ax3_title:
                 # diffusivity comparison plots for optimization
@@ -1431,95 +1512,119 @@ class PermeationPlots(tk.Frame):
 
     def pressure_time_plot(self, data, filename, fig1, ax1, ax12):
         """ Creates the pressure vs. time (top right) plot """
-        # Plot the point where the isolation valve opens and where steady state is determined
-        ax1.plot(data.loc[self.t0[filename], 't'], data.loc[self.t0[filename], 'SecP'], 'yo', label="t$_0$")
-        ax1.plot(data.loc[self.tss[filename], 't'], data.loc[self.tss[filename], 'SecP'], 'mo', label="t$_{ss}$")
+        # Plot the point where the isolation valve opens and where equilibrium is determined
+        ax1.plot(data.loc[self.t0[filename], 't'], data.loc[self.t0[filename], 'Pres'], 'yo', label="t$_0$")
+        ax1.plot(data.loc[self.t_e[filename], 't'], data.loc[self.t_e[filename], 'Pres'], 'mo', label="t$_e$")
 
-        # Plot secondary pressure and set up axes for it
-        ax1.plot(data['t'], data['SecP'], '.', label='Secondary Pressure')
+        # Plot pressure and set up axes for it
+        ax1.plot(data['t'], data['Pres'], '.', label='Pressure')
         ax1.set_title(self.ax1_title)
         ax1.set_xlabel(self.ax1_xlabel)
         ax1.set_ylabel(self.ax1_ylabel)
 
-        # Plot primary pressure and set up axes for it
-        ax12.plot(data['t'], data['PrimP'], color='orange', label='Primary Pressure')
+        # Plot temperatures and set up axes for them
+        base_colors = ['#1f77b4', '#ff7f0e', '#d62728', '#2ca02c', '#9467bd',
+                       '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']  # Red moved from fourth to third
+        color_index = 2  # skip blue, orange, and red
+        for i in range(1, max(self.num_GasT0, self.num_GasT) + 1):
+            color_index += 1  # Move to next color in the color list
+            color_index %= 10  # Cycle back to beginning if reached the end of the color list
+            ax12.plot(data['t'], data['GasT' + str(i)], label='GasT' + str(i), color=base_colors[color_index])
         ax12.set_ylabel(self.ax12_ylabel)
-
-        # Generate and plot the red leak line (showing which values are used in initial calculations)
-        # and green steady state line (showing which values are used in final calculations)
-        xleak = data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 't']
-        yleak = self.pleak_lf[filename]["slope"] * xleak + self.pleak_lf[filename]["intercept"]
-        xss = data.loc[self.tss[filename] + 1:self.tss[filename] + self.ss_range[filename], 't']
-        yss = self.pss_lf[filename]["slope"] * xss + self.pss_lf[filename]["intercept"]
-        ax1.plot(xleak, yleak, color='red', label='Leak')
-        ax1.plot(xss, yss, color='lime', label='Steady State')
-        # Extrapolate the lines further
-        xleak_ex = np.array([data.loc[self.t0[filename] - self.leak_range[filename], 't'],
-                             (self.intercept[filename])[0]])
-        yleak_ex = self.pleak_lf[filename]["slope"] * xleak_ex + self.pleak_lf[filename]["intercept"]
-        xss_ex = np.array([(self.intercept[filename])[0],
-                           data.loc[self.tss[filename] + self.ss_range[filename], 't']])
-        yss_ex = self.pss_lf[filename]["slope"] * xss_ex + self.pss_lf[filename]["intercept"]
-        ax1.plot(xleak_ex, yleak_ex, ":", color='red')
-        ax1.plot(xss_ex, yss_ex, ":", color='lime')
-        # Plot a point at the intersection of the leak line and steady state line
-        ax1.plot(*self.intercept[filename], 'o')
 
         # Make sure ticks are in the right spot
         ax1.yaxis.set_ticks_position('left')
         ax12.yaxis.set_ticks_position('right')
         ax1.xaxis.set_ticks_position('bottom')
 
+        # Generate and plot the red initial line (showing which values are used in initial calculations)
+        # and green equilibrium line (showing which values are used in final calculations)
+        xi = data.loc[self.t0[filename] - self.i_range[filename]:self.t0[filename] - 1, 't']
+        yi = data.loc[self.t0[filename] - self.i_range[filename]:self.t0[filename] - 1, 'Pres']
+        x_e = data.loc[self.t_e[filename] + 1:self.t_e[filename] + self.e_range[filename], 't']
+        y_e = data.loc[self.t_e[filename] + 1:self.t_e[filename] + self.e_range[filename], 'Pres']
+        ax1.plot(xi, yi, color='red', label='Initial Points')
+        ax1.plot(x_e, y_e, color='lime', label='Equilibrium Points')
+
         # Ensure all plots are on the legend. Simply using fig1.legend(...) doesn't get rid of old legends,
         # causing them to stack up in a way I can't figure out how to remove.
         # https://stackoverflow.com/questions/5484922/secondary-axis-with-twinx-how-to-add-to-legend/47370214#47370214
         pt_lines, pt_labels = ax1.get_legend_handles_labels()
         pt_lines2, pt_labels2 = ax12.get_legend_handles_labels()
-        ax12.legend(pt_lines + pt_lines2, pt_labels + pt_labels2, loc="lower right", bbox_to_anchor=(1, 0),
+        ax12.legend(pt_lines + pt_lines2, pt_labels + pt_labels2, loc="upper left", bbox_to_anchor=(0, 1),
                     bbox_transform=ax1.transAxes, framealpha=0.5)
 
-    def perm_time_plot(self, data, filename, fig2, ax2, ax22):
-        """ Creates the permeability vs. time (bottom middle) plot """
-        # Plot the permeability over time
-        ax2.plot(data.loc[self.t0[filename]:, 't'], self.Perm_Plot[filename].iloc[self.t0[filename]:],
-                 label="RT Perm")
+    def pres_comp_temp_plot(self, fig2, ax2):
+        """ Creates the pressure vs. composition (bottom middle) plot and color codes using temperature """
+        # Group data files according to their temperature to the nearest temperature divisible by 5
+        # todo Perhaps allow this to round to tens in the case that the scatter of sample temp is larger than 2.5 deg C
+        approx_temps = {}
+        for filename in self.datafiles.keys():
+            approx_temps[filename] = round(round(2 * (self.Ts_e[filename] - self.storage.standard_temp), -1) / 2)
+            # Round to ten:
+            # approx_temps[filename] = round(self.Ts_e[filename] - self.storage.standard_temp, -1)
+        # Sort the grouped temperatures
+        # https://www.geeksforgeeks.org/python-sort-python-dictionaries-by-key-or-value/
+        sorted_temps = sorted(approx_temps.items(), key=lambda kv: (kv[1], kv[0]))
+        sorted_names = []  # Store sorted filenames
+        # Assign colors to data files according to their group
+        old_temp = 0
+        base_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+                       '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+        color_index = -1
+        tempe_color = {}  # Temperature color
+        legend_plots = []
+        for i, tup in enumerate(sorted_temps):
+            new_temp = tup[1]
+            if new_temp != old_temp:  # if the temperature of the latest datafile is different from the last datafile
+                color_index += 1  # Move to next color in the color list
+                color_index %= 10  # Cycle back to beginning if reached the end of the color list
+                legend_plots.append([i, str(new_temp) + " \u00B0C"])  # Keep track of which artists will be in the legend
+            tempe_color[tup[0]] = base_colors[color_index]  # Set what color the datapoint will be
+            old_temp = new_temp
+            sorted_names.append(tup[0])
+
+        artists = []
+        for filename in sorted_names:
+            y = self.pr_e_avg[filename]  # Pa
+            x = self.HM[filename]  # Hydrogen to metal atoms ratio
+            T = self.Ts_e[filename] - self.storage.standard_temp  # degrees C
+            label = f'{filename}\nComposition={x:.3e} H/M' + \
+                    f'\nTemperature={T:.3e} \u00B0C\nPressure={y:.3e} Pa'
+
+            a = ax2.errorbar(x, y, yerr=self.pr_e_err[filename],
+                             xerr=self.HM_err[filename], marker='o', label=label, color=tempe_color[filename])
+            artists.append(a)
+
+            # set labels on the points
+        mplcursors.cursor(artists, hover=mplcursors.HoverMode.Transient).connect(
+            "add", lambda sel: sel.annotation.set_text(sel.artist.get_label()))
+
+        # Set up axes
         ax2.set_title(self.ax2_title)
         ax2.set_xlabel(self.ax2_xlabel)
         ax2.set_ylabel(self.ax2_ylabel)
-
-        # Plot temperature vs. time and set relevant axes
-        ax22.plot(data.loc[self.t0[filename]:, 't'], data.loc[self.t0[filename]:, 'SampT'], color='orange',
-                  label='Sample T')
-        ax22.set_ylabel(self.ax22_ylabel)
-
+        ax2.semilogy()
         # Make sure ticks are in the right spot
         ax2.yaxis.set_ticks_position('left')
-        ax22.yaxis.set_ticks_position('right')
         ax2.xaxis.set_ticks_position('bottom')
 
-        # Plot a line showing the final calculated permeability
-        x = np.linspace(*self.ax2.get_xlim())
-        y = self.Phi[filename] * np.ones_like(x)
-        ax2.plot(x, y, 'k--', label='SS Perm')
-        # Center the permeation plot where it can be easily seen. Added the bottom limit because the permeation was
-        # dipping way below 0. Added the top limit was because autoscaling was failing once the bottom limit was added.
-        ax2.set_ylim(bottom=0, top=1.25*self.Phi[filename])
-
-        # Ensure all plots are on the legend. Simply using fig2.legend(...) doesn't get rid of old legends,
-        # causing them to stack up in a way I can't figure out how to remove.
-        # https://stackoverflow.com/questions/5484922/secondary-axis-with-twinx-how-to-add-to-legend/47370214#47370214
-        pt_lines, pt_labels = ax2.get_legend_handles_labels()
-        pt_lines2, pt_labels2 = ax22.get_legend_handles_labels()
-        ax22.legend(pt_lines + pt_lines2, pt_labels + pt_labels2, loc="lower right", bbox_to_anchor=(1, 0),
-                    bbox_transform=ax2.transAxes, framealpha=0.5)
+        # [[x[0] for x in legend_plots]] gets the list of integers since np.array(legend_plots)[:, 0] produces an
+        #      array of strings, and strings can't be used as indexes.
+        # np.array(ax2.lines) turns the list of artists into an array so that a list can be used as indexes to pick out
+        #      the first artist for each color/temperature and only use those in the legend.
+        # np.array(legend_plots)[:, 1] produces the labels for the legend
+        ax2.legend(np.array(ax2.lines)[[x[0] for x in legend_plots]], np.array(legend_plots)[:, 1],
+                   loc="lower right", bbox_to_anchor=(1, 0), bbox_transform=ax2.transAxes, framealpha=0.5)
 
     def comparison_plot(self, filename, ax3):
         """ Creates the diffusivity optimization comparison (bottom right) plot """
-        # diffusivity comparison plots for optimization
+        # Diffusivity comparison plots for optimization
         ax3.plot(self.D_time[filename][1:], self.lhs[filename][1:], '.', label='Experimental Data', )
-        ax3.plot(self.D_time[filename][1:], self.rhs[filename][1:], label='D: Time-Lag')
-        ax3.plot(self.D_time[filename][1:], self.rhs_cf[filename][1:], '--', label='D: Optimized')
+        ax3.plot(self.D_time[filename][1:], self.rhs[filename][1:], '--', label='D: Initial Guess')
+        ax3.plot(self.D_time[filename][1:], self.rhs_cf[filename][1:], '--', label='D: Optimized Fit')
         ax3.set_title(self.ax3_title)
+        # Set up axes
         ax3.set_xlabel(self.ax3_xlabel)
         ax3.set_ylabel(self.ax3_ylabel)
         ax3.yaxis.set_ticks_position('left')
@@ -1530,16 +1635,7 @@ class PermeationPlots(tk.Frame):
         """ Creates the PDK (bottom left) plot for calculated properties of different files """
         plot = self.current_variable.get()
         artists = []
-
-        # Set plot title
-        if plot == "Flux":
-            self.ax_title = plot + " vs. Pressure"
-            self.ax.loglog()
-        else:
-            self.ax_title = plot + " vs. Temperature"
-
-        # store as a local variable to allow for a different xlabel in the flux vs. pressure plot
-        xlabel = self.ax_xlabel
+        self.ax_title = plot + " vs. Temperature"
 
         # set y labels to get units right
         if plot == "Permeability":
@@ -1548,14 +1644,11 @@ class PermeationPlots(tk.Frame):
             self.ax_ylabel = plot + " (m$^2$ s$^{-1}$)"
         elif plot == "Solubility":
             self.ax_ylabel = plot + " (mol m$^{-3}$ Pa$^{-0.5}$)"
-        elif plot == "Flux":
-            self.ax_ylabel = plot + " (mol m$^{-2}$ s$^{-1}$)"
-            xlabel = "Pressure (Pa)"
 
         for filename in self.datafiles.keys():
-            x = self.Tsamp0[filename] - self.storage.standard_temp  # temperature
-            p = self.PrimP_average[filename]  # pressure
-            # y values (and for flux, x values) change based on plot type
+            x = self.Ts0[filename] - self.storage.standard_temp
+            p = self.pr_e_avg[filename]  # pressure
+            # y values change based on plot type
             if plot == "Permeability":
                 y = self.Phi[filename]
                 yerr = self.Phi_err[filename]
@@ -1571,12 +1664,6 @@ class PermeationPlots(tk.Frame):
                 yerr = self.Ks_err[filename]
                 label = f'{filename}\n{plot}={y:.3e}' + r' mol m$^{-3}\,$Pa$^{-0.5}$' + \
                         f'\nTemperature={x:.3e} \u00B0C\nPressure={p:.3e} Pa'
-            elif plot == "Flux":
-                y = self.F[filename]
-                yerr = self.F_err[filename]
-                x = p  # change x-axis to pressure (the name was changed earlier to still work when there is no data)
-                label = f'{filename}\n{plot}={y:.3e}' + r' mol m$^{-2}\,$s$^{-1}$' + \
-                        f'\nPressure={p:.3e} Pa'
             else:
                 # This shouldn't be possible
                 showerror("Selection Error", "Error, you should have selected Permeability, Diffusivity, Solubility.")
@@ -1597,7 +1684,7 @@ class PermeationPlots(tk.Frame):
 
         ax.set_title(self.ax_title)
         ax.set_ylabel(self.ax_ylabel)
-        ax.set_xlabel(xlabel)
+        ax.set_xlabel(self.ax_xlabel)
         ax.yaxis.set_ticks_position('left')
         ax.xaxis.set_ticks_position('bottom')
 
@@ -1634,7 +1721,7 @@ class PermeationPlots(tk.Frame):
 
 
 class AdjustPVars(tk.Toplevel):
-    """ popup window used to change many of the variables used in loading permeation data. """
+    """ popup window used to change many of the variables used in loading absorption data. """
 
     def __init__(self, storage, pos, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1655,7 +1742,7 @@ class AdjustPVars(tk.Toplevel):
             height = 424
             extra_width = 205  # width to add for each new TC beyond three
         else:
-            width = 680
+            width = 710
             height = 330
             extra_width = 165
         pos_right = int(pos[0] + (gui_x - width) / 2)
@@ -1669,23 +1756,25 @@ class AdjustPVars(tk.Toplevel):
         self.changed = False  # Boolean of whether edits have been made that require plot refreshing
 
         # Get the path for the persistent variable file
-        self.pv_filename = os.path.join('data_files', 'persistent_permeation_input_variables.xlsx')
+        self.pv_filename = os.path.join('data_files', 'persistent_absorption_input_variables.xlsx')
 
         # Read the Excel sheets into dataframes for easier access
         self.numbers_info = pd.read_excel(self.pv_filename, sheet_name="Numbers", header=0)
         self.misc_info = pd.read_excel(self.pv_filename, sheet_name="MiscInfo", header=0)
         self.GasT_info = pd.read_excel(self.pv_filename, sheet_name="GasT", header=0)
         self.SampT_info = pd.read_excel(self.pv_filename, sheet_name="SampT", header=0)
-        self.PrimP_info = pd.read_excel(self.pv_filename, sheet_name="PrimP", header=0)
-        self.SecP_info = pd.read_excel(self.pv_filename, sheet_name="SecP", header=0)
+        self.Pres_info = pd.read_excel(self.pv_filename, sheet_name="Pres", header=0)
 
         # Pull out variables for display and potential editing
-        self.num_GasT = tk.DoubleVar(value=self.numbers_info['GasT'][0])
 
-        # Method of scaling the window width according to number of TCs measuring GasT. At num_GasT = 10,
+        # Number of TCs measuring gas temperature
+        self.num_GasT0 = tk.DoubleVar(value=self.numbers_info['GasT'][0])
+        self.num_GasT = tk.DoubleVar(value=self.numbers_info['GasT'][1])
+
+        # Method of scaling the window width according to number of TCs measuring GasT. At num_GasT0 = 10,
         # things are still fine. Potentially add a scrollbar instead.
-        if self.num_GasT.get() > 2:
-            width += int(extra_width * (self.num_GasT.get() - 2))
+        if max(self.num_GasT0.get(), self.num_GasT.get()) > 2:
+            width += 90 + int(extra_width * (max(self.num_GasT0.get(), self.num_GasT.get()) - 3))
             self.geometry("{}x{}+{}+{}".format(width, height, pos_right, pos_down))
 
         # time
@@ -1716,19 +1805,12 @@ class AdjustPVars(tk.Toplevel):
         self.cerr_SampT = tk.DoubleVar(value=self.SampT_info['SampT'][3])
         self.perr_SampT = tk.DoubleVar(value=self.SampT_info['SampT'][4])
 
-        # Primary pressure
-        self.col_PrimP = tk.StringVar(value=self.PrimP_info['PrimP'][0])
-        self.m_PrimP = tk.DoubleVar(value=self.PrimP_info['PrimP'][1])
-        self.b_PrimP = tk.DoubleVar(value=self.PrimP_info['PrimP'][2])
-        self.cerr_PrimP = tk.DoubleVar(value=self.PrimP_info['PrimP'][3])
-        self.perr_PrimP = tk.DoubleVar(value=self.PrimP_info['PrimP'][4])
-
-        # Secondary pressure
-        self.col_SecP = tk.StringVar(value=self.SecP_info['SecP'][0])
-        self.m_SecP = tk.DoubleVar(value=self.SecP_info['SecP'][1])
-        self.b_SecP = tk.DoubleVar(value=self.SecP_info['SecP'][2])
-        self.cerr_SecP = tk.DoubleVar(value=self.SecP_info['SecP'][3])
-        self.perr_SecP = tk.DoubleVar(value=self.SecP_info['SecP'][4])
+        # Pressure
+        self.col_Pres = tk.StringVar(value=self.Pres_info['Pres'][0])
+        self.m_Pres = tk.DoubleVar(value=self.Pres_info['Pres'][1])
+        self.b_Pres = tk.DoubleVar(value=self.Pres_info['Pres'][2])
+        self.cerr_Pres = tk.DoubleVar(value=self.Pres_info['Pres'][3])
+        self.perr_Pres = tk.DoubleVar(value=self.Pres_info['Pres'][4])
 
         # Isolation valve
         self.col_IV = tk.StringVar(value=self.misc_info['Isolation Valve'][0])
@@ -1748,19 +1830,21 @@ class AdjustPVars(tk.Toplevel):
         self.create_inputs()
 
         submit_button = ttk.Button(self, text="Submit", command=self.submit)
-        submit_button.grid(row=14, column=6, columnspan=2, sticky='e')
+        submit_button.grid(row=14, column=7, columnspan=2, sticky='e')
 
         quit_button = ttk.Button(self, text="Cancel", command=self.close_pv_win)
-        quit_button.grid(row=14, column=8, columnspan=2, sticky='w')
+        quit_button.grid(row=14, column=9, columnspan=2, sticky='w')
 
         parent = tk.Frame(self)
-        parent.grid(row=14, column=0, columnspan=6, sticky="nsew", pady=5)
+        parent.grid(row=14, column=0, columnspan=7, sticky="nsew", pady=5)
+        self.add_entry(self, parent, variable=self.inputs, key='num_GasT0', text="Number of TCs measuring initial GasT:",
+                       subscript='', ent_w=3, tvar=self.num_GasT0, units='', row=0, column=0, in_window=True,
+                       command=lambda tvar, variable, key, pf: self.one_to_max(tvar, variable, key, pf))
         self.add_entry(self, parent, variable=self.inputs, key='num_GasT', text="Number of TCs measuring GasT:",
-                       subscript='',
-                       tvar=self.num_GasT, units='', row=0, column=0, in_window=True,
-                       command=lambda tvar, variable, key, pf: self.one_or_more(tvar, variable, key, pf))
+                       subscript='', ent_w=3, tvar=self.num_GasT, units='', row=0, column=4, in_window=True,
+                       command=lambda tvar, variable, key, pf: self.one_to_max(tvar, variable, key, pf))
 
-    def one_or_more(self, tvar, variable, key, pf=None):
+    def one_to_max(self, tvar, variable, key, pf=None):
         """ Ensure the user entry is greater than 1. If not, set it equal to 1. """
         self.storage.check_for_number(tvar, variable, key, parent_frame=pf)
         maxTCnum = 8  # Max number of TCs to allow
@@ -1790,7 +1874,7 @@ class AdjustPVars(tk.Toplevel):
         return True
 
     def create_labels(self):
-        """ Creates intro text to Permeation Plots tab's Adjust Persistent Variables window """
+        """ Creates intro text to Absorption Plots tab's Adjust Persistent Variables window """
         parent = tk.Frame(self)
         parent.grid(row=0, column=0, columnspan=10, sticky="nsew")
         tk.Label(parent, text='Choose how the program will handle your uploaded data. ' +
@@ -1808,7 +1892,7 @@ class AdjustPVars(tk.Toplevel):
         y = self.winfo_rooty()
         apv_width = self.winfo_width()
         apv_height = self.winfo_height()
-        PPSettingsHelp(pos=(x, y), size=(apv_width, apv_height)).show_help_window()
+        APSettingsHelp(pos=(x, y), size=(apv_width, apv_height)).show_help_window()
 
     def check_col_names(self, tvar, variable, key):
         """ Checks to make sure the entered string is made up of only letters"""
@@ -1860,55 +1944,28 @@ class AdjustPVars(tk.Toplevel):
                                                                                              parent_frame=pf))
 
         entry_col += 3
-        tk.Label(parent, text="PrimP [Pa]").grid(row=entry_row + 0, column=entry_col + 1)
-        self.add_entry(self, parent, variable=self.inputs, key="col_PrimP", text="col", innersubscript="PrimP",
-                       innertext=":", subscript="", tvar=self.col_PrimP, units="", ent_w=entry_w,
+        tk.Label(parent, text="Pres [Pa]").grid(row=entry_row + 0, column=entry_col + 1)
+        self.add_entry(self, parent, variable=self.inputs, key="col_Pres", text="col", innersubscript="Pres",
+                       innertext=":", subscript="", tvar=self.col_Pres, units="", ent_w=entry_w,
                        row=entry_row + 1, column=entry_col,
                        command=lambda tvar, variable, key: self.check_col_names(tvar, variable, key))
-        self.add_entry(self, parent, variable=self.inputs, key="m_PrimP", text="m", innersubscript="PrimP",
-                       innertext=":", subscript="", tvar=self.m_PrimP, units="[Pa/?]", ent_w=entry_w,
+        self.add_entry(self, parent, variable=self.inputs, key="m_Pres", text="m", innersubscript="Pres",
+                       innertext=":", subscript="", tvar=self.m_Pres, units="[Pa/?]", ent_w=entry_w,
                        row=entry_row + 2, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
-        self.add_entry(self, parent, variable=self.inputs, key="b_PrimP", text="b", innersubscript="PrimP",
-                       innertext=":", subscript="", tvar=self.b_PrimP, units="[Pa]", ent_w=entry_w,
+        self.add_entry(self, parent, variable=self.inputs, key="b_Pres", text="b", innersubscript="Pres",
+                       innertext=":", subscript="", tvar=self.b_Pres, units="[Pa]", ent_w=entry_w,
                        row=entry_row + 3, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
-        self.add_entry(self, parent, variable=self.inputs, key="cerr_PrimP", text="cerr", innersubscript="PrimP",
-                       innertext=":", subscript="", tvar=self.cerr_PrimP, units="[Pa]", ent_w=entry_w,
+        self.add_entry(self, parent, variable=self.inputs, key="cerr_Pres", text="cerr", innersubscript="Pres",
+                       innertext=":", subscript="", tvar=self.cerr_Pres, units="[Pa]", ent_w=entry_w,
                        row=entry_row + 4, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
-        self.add_entry(self, parent, variable=self.inputs, key="perr_PrimP", text="perr", innersubscript="PrimP",
-                       innertext=":", subscript="", tvar=self.perr_PrimP, units="[%]", ent_w=entry_w,
-                       row=entry_row + 5, column=entry_col, in_window=True,
-                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
-                                                                                             parent_frame=pf))
-
-        entry_col += 3
-        tk.Label(parent, text="SecP [Pa]").grid(row=entry_row + 0, column=entry_col + 1)
-        self.add_entry(self, parent, variable=self.inputs, key="col_SecP", text="col", innersubscript="SecP",
-                       innertext=":", subscript="", tvar=self.col_SecP, units="", ent_w=entry_w,
-                       row=entry_row + 1, column=entry_col,
-                       command=lambda tvar, variable, key: self.check_col_names(tvar, variable, key))
-        self.add_entry(self, parent, variable=self.inputs, key="m_SecP", text="m", innersubscript="SecP",
-                       innertext=":", subscript="", tvar=self.m_SecP, units="[Pa/?]", ent_w=entry_w,
-                       row=entry_row + 2, column=entry_col, in_window=True,
-                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
-                                                                                             parent_frame=pf))
-        self.add_entry(self, parent, variable=self.inputs, key="b_SecP", text="b", innersubscript="SecP",
-                       innertext=":", subscript="", tvar=self.b_SecP, units="[Pa]", ent_w=entry_w,
-                       row=entry_row + 3, column=entry_col, in_window=True,
-                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
-                                                                                             parent_frame=pf))
-        self.add_entry(self, parent, variable=self.inputs, key="cerr_SecP", text="cerr", innersubscript="SecP",
-                       innertext=":", subscript="", tvar=self.cerr_SecP, units="[Pa]", ent_w=entry_w,
-                       row=entry_row + 4, column=entry_col, in_window=True,
-                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
-                                                                                             parent_frame=pf))
-        self.add_entry(self, parent, variable=self.inputs, key="perr_SecP", text="perr", innersubscript="SecP",
-                       innertext=":", subscript="", tvar=self.perr_SecP, units="[%]", ent_w=entry_w,
+        self.add_entry(self, parent, variable=self.inputs, key="perr_Pres", text="perr", innersubscript="Pres",
+                       innertext=":", subscript="", tvar=self.perr_Pres, units="[%]", ent_w=entry_w,
                        row=entry_row + 5, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
@@ -1926,6 +1983,21 @@ class AdjustPVars(tk.Toplevel):
                                                                                              parent_frame=pf))
         self.add_entry(self, parent, variable=self.inputs, key="b_IV", text="b", innersubscript="IV",
                        innertext=":", subscript="", tvar=self.b_IV, units="", ent_w=entry_w,
+                       row=entry_row + 3, column=entry_col, in_window=True,
+                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
+                                                                                             parent_frame=pf))
+
+        entry_col += 3
+        tk.Label(parent, text="Starting Row").grid(row=entry_row + 0, column=entry_col + 1)
+        self.add_entry(self, parent, variable=self.inputs, key="Starting Row", text="", innersubscript="",
+                       innertext="", subscript="", tvar=self.starting_row, units="", ent_w=entry_w,
+                       row=entry_row + 1, column=entry_col, in_window=True,
+                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
+                                                                                             parent_frame=pf))
+
+        tk.Label(parent, text="Rows in Footer").grid(row=entry_row + 2, column=entry_col + 1)
+        self.add_entry(self, parent, variable=self.inputs, key="Footer Rows", text="", innersubscript="",
+                       innertext="", subscript="", tvar=self.footer_rows, units="", ent_w=entry_w,
                        row=entry_row + 3, column=entry_col, in_window=True,
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
@@ -1998,21 +2070,6 @@ class AdjustPVars(tk.Toplevel):
                        command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
                                                                                              parent_frame=pf))
 
-        entry_col += 3
-        tk.Label(parent, text="Starting Row").grid(row=row2entries + 0, column=entry_col + 1)
-        self.add_entry(self, parent, variable=self.inputs, key="Starting Row", text="", innersubscript="",
-                       innertext="", subscript="", tvar=self.starting_row, units="", ent_w=entry_w,
-                       row=row2entries + 1, column=entry_col, in_window=True,
-                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
-                                                                                             parent_frame=pf))
-
-        tk.Label(parent, text="Rows in Footer").grid(row=row2entries + 2, column=entry_col + 1)
-        self.add_entry(self, parent, variable=self.inputs, key="Footer Rows", text="", innersubscript="",
-                       innertext="", subscript="", tvar=self.footer_rows, units="", ent_w=entry_w,
-                       row=row2entries + 3, column=entry_col, in_window=True,
-                       command=lambda tvar, variable, key, pf: self.storage.check_for_number(tvar, variable, key,
-                                                                                             parent_frame=pf))
-
     def submit(self):
         """Updates the persistent variables with user input"""
 
@@ -2021,18 +2078,16 @@ class AdjustPVars(tk.Toplevel):
             list(self.cerr_GasT.values()) + list(self.perr_GasT.values())
 
         # List of all column names for checking for uniqueness
-        col_list = [self.col_t.get(), self.col_SampT.get(), self.col_PrimP.get(),
-                    self.col_SecP.get(), self.col_IV.get()]
+        col_list = [self.col_t.get(), self.col_SampT.get(), self.col_Pres.get(), self.col_IV.get()]
         for val in self.col_GasT.values():
             col_list.append(val.get())
-
         # check to make sure no numerical variable is assigned "nan"
         if sum(map(np.isnan, [self.m_t.get(), self.b_t.get(), self.cerr_t.get(), self.perr_t.get(),
                               self.m_SampT.get(), self.b_SampT.get(), self.cerr_SampT.get(), self.perr_SampT.get(),
-                              self.m_PrimP.get(), self.b_PrimP.get(), self.cerr_PrimP.get(), self.perr_PrimP.get(),
-                              self.m_SecP.get(), self.b_SecP.get(), self.cerr_SecP.get(), self.perr_SecP.get(),
+                              self.m_Pres.get(), self.b_Pres.get(), self.cerr_Pres.get(), self.perr_Pres.get(),
                               self.m_IV.get(), self.b_IV.get(), self.starting_row.get(), self.footer_rows.get(),
-                              self.num_GasT.get()])) + any(np.isnan(val.get()) for val in GasT_vals) > 0:
+                              self.num_GasT0.get(), self.num_GasT.get()])) + \
+                              any(np.isnan(val.get()) for val in GasT_vals) > 0:
             tk.messagebox.showwarning(title="Missing Entry",
                                       message="Please fill in remaining boxes before continuing.")
             self.deiconify()
@@ -2056,24 +2111,24 @@ class AdjustPVars(tk.Toplevel):
                                                  self.cerr_GasT[GasT_inst].get(), self.perr_GasT[GasT_inst].get()]
                 self.SampT_info['SampT'] = [self.col_SampT.get(), self.m_SampT.get(), self.b_SampT.get(),
                                             self.cerr_SampT.get(), self.perr_SampT.get()]
-                self.PrimP_info['PrimP'] = [self.col_PrimP.get(), self.m_PrimP.get(), self.b_PrimP.get(),
-                                            self.cerr_PrimP.get(), self.perr_PrimP.get()]
-                self.SecP_info['SecP'] = [self.col_SecP.get(), self.m_SecP.get(), self.b_SecP.get(),
-                                          self.cerr_SecP.get(), self.perr_SecP.get()]
+                self.Pres_info['Pres'] = [self.col_Pres.get(), self.m_Pres.get(), self.b_Pres.get(),
+                                          self.cerr_Pres.get(), self.perr_Pres.get()]
                 self.misc_info['Isolation Valve'] = [self.col_IV.get(), self.m_IV.get(),
                                                      self.b_IV.get(), np.nan, np.nan]
                 self.misc_info['Starting Row'] = [self.starting_row.get(), np.nan, np.nan, np.nan, np.nan]
                 self.misc_info['Rows in Footer'] = [self.footer_rows.get(), np.nan, np.nan, np.nan, np.nan]
-
-                # Create or remove data from dataframe so that it has the same number of instruments measuring GasT
-                # as self.num_GasT. Note that this can handle non-integer values of self.numGasT
-                while self.numbers_info['GasT'][0] > self.num_GasT.get():
-                    del self.GasT_info['GasT' + str(self.numbers_info['GasT'][0])]
-                    self.numbers_info.loc[0, 'GasT'] = self.numbers_info.loc[0, 'GasT'] - 1
-                while self.numbers_info['GasT'][0] < self.num_GasT.get():
-                    self.GasT_info['GasT' + str(self.numbers_info['GasT'][0] + 1)] = \
-                        [self.col_GasT['GasT1'].get(), 1.0, 0.0, 0.0, 0.0]
-                    self.numbers_info.loc[0, 'GasT'] = self.numbers_info['GasT'][0] + 1
+                # Create or remove data from dataframe so that it has the max number of instruments measuring GasT
+                # out of self.num_GasT0 and self.num_GasT. Note that this can handle non-integer values
+                # of self.num_GasT0 and self.num_GasT
+                max_num = max(self.numbers_info['GasT'][0], self.numbers_info['GasT'][1])
+                while max_num > max(self.num_GasT0.get(), self.num_GasT.get()):
+                    del self.GasT_info['GasT' + str(max_num)]
+                    max_num -= 1
+                while max_num < max(self.num_GasT0.get(), self.num_GasT.get()):
+                    self.GasT_info['GasT' + str(max_num + 1)] = [self.col_GasT['GasT1'].get(), 1.0, 0.0, 0.0, 0.0]
+                    max_num += 1
+                self.numbers_info.loc[0, 'GasT'] = self.num_GasT0.get()
+                self.numbers_info.loc[1, 'GasT'] = self.num_GasT.get()
 
                 # overwrite the old source file with updated dataframes
                 with pd.ExcelWriter(self.pv_filename, engine="openpyxl", if_sheet_exists='new', mode='a') as writer:
@@ -2084,16 +2139,14 @@ class AdjustPVars(tk.Toplevel):
                     workBook.remove(workBook['MiscInfo'])
                     workBook.remove(workBook['GasT'])
                     workBook.remove(workBook['SampT'])
-                    workBook.remove(workBook['PrimP'])
-                    workBook.remove(workBook['SecP'])
+                    workBook.remove(workBook['Pres'])
 
                     # Write updated dataframes to the Excel sheets
                     self.numbers_info.to_excel(writer, sheet_name='Numbers', index=False)
                     self.misc_info.to_excel(writer, sheet_name='MiscInfo', index=False)
                     self.GasT_info.to_excel(writer, sheet_name='GasT', index=False)
                     self.SampT_info.to_excel(writer, sheet_name='SampT', index=False)
-                    self.PrimP_info.to_excel(writer, sheet_name='PrimP', index=False)
-                    self.SecP_info.to_excel(writer, sheet_name='SecP', index=False)
+                    self.Pres_info.to_excel(writer, sheet_name='Pres', index=False)
                     writer.save()
 
                 self.changed = True
@@ -2108,8 +2161,7 @@ class AdjustPVars(tk.Toplevel):
         temp_misc_info = self.misc_info.copy()
         temp_GasT_info = self.GasT_info.copy()
         temp_SampT_info = self.SampT_info.copy()
-        temp_PrimP_info = self.PrimP_info.copy()
-        temp_SecP_info = self.SecP_info.copy()
+        temp_Pres_info = self.Pres_info.copy()
         temp_numbers_info = self.numbers_info.copy()
 
         # update new dataframes with current entries
@@ -2121,25 +2173,22 @@ class AdjustPVars(tk.Toplevel):
                                          self.cerr_GasT[GasT_inst].get(), self.perr_GasT[GasT_inst].get()]
         temp_SampT_info['SampT'] = [self.col_SampT.get(), self.m_SampT.get(), self.b_SampT.get(),
                                     self.cerr_SampT.get(), self.perr_SampT.get()]
-        temp_PrimP_info['PrimP'] = [self.col_PrimP.get(), self.m_PrimP.get(), self.b_PrimP.get(),
-                                    self.cerr_PrimP.get(), self.perr_PrimP.get()]
-        temp_SecP_info['SecP'] = [self.col_SecP.get(), self.m_SecP.get(), self.b_SecP.get(),
-                                  self.cerr_SecP.get(), self.perr_SecP.get()]
+        temp_Pres_info['Pres'] = [self.col_Pres.get(), self.m_Pres.get(), self.b_Pres.get(),
+                                  self.cerr_Pres.get(), self.perr_Pres.get()]
         temp_misc_info['Isolation Valve'] = [self.col_IV.get(), self.m_IV.get(), self.b_IV.get(), np.nan, np.nan]
         temp_misc_info['Starting Row'] = [self.starting_row.get(), np.nan, np.nan, np.nan, np.nan]
         temp_misc_info['Rows in Footer'] = [self.footer_rows.get(), np.nan, np.nan, np.nan, np.nan]
-        temp_numbers_info['GasT'] = [int(self.num_GasT.get())]  # "int" is so HyPAT recognizes when there was no change
+        temp_numbers_info['GasT'] = [int(self.num_GasT0.get()), int(self.num_GasT.get())]  # "int" is so HyPAT recognizes when there was no change
 
         # List of all column names for checking for uniqueness
-        col_list = [self.col_t.get(), self.col_SampT.get(), self.col_PrimP.get(),
-                    self.col_SecP.get(), self.col_IV.get()]
+        col_list = [self.col_t.get(), self.col_SampT.get(), self.col_Pres.get(), self.col_IV.get()]
         for val in self.col_GasT.values():
             col_list.append(val.get())
 
         # Check to see if any changes have been made and if there are any duplicate column names
         if temp_misc_info.equals(self.misc_info) and temp_GasT_info.equals(self.GasT_info) and \
-                temp_SampT_info.equals(self.SampT_info) and temp_PrimP_info.equals(self.PrimP_info) and \
-                temp_SecP_info.equals(self.SecP_info) and temp_numbers_info.equals(self.numbers_info)\
+                temp_SampT_info.equals(self.SampT_info) and \
+                temp_Pres_info.equals(self.Pres_info) and temp_numbers_info.equals(self.numbers_info)\
                 and len(set(col_list)) == len(col_list):
             self.destroy()
         elif len(set(col_list)) < len(col_list):  # If there are duplicate column names
@@ -2164,13 +2213,13 @@ class AdjustPVars(tk.Toplevel):
         return self.changed
 
 
-class PPSettingsHelp(tk.Toplevel):
+class APSettingsHelp(tk.Toplevel):
     """ popup box to display information about the variables that can be edited. """
 
     def __init__(self, pos, size, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.title("Help for Permeation's Persistent Variables Settings")
+        self.title("Help for Absorption's Persistent Variables Settings")
         # self.resizable(width=False, height=False)
         self.minsize(400, 200)
 
@@ -2198,9 +2247,8 @@ class PPSettingsHelp(tk.Toplevel):
         # Create a text widget for each symbol, along with one (" ") for the header
         td = {}
         tdt = {}
-        for item in (" ", "t [s]: ", "PrimP [Pa]: ", "SecP [Pa]: ", "Isolation Valve [1/0]: ", "Starting Row: ",
-                     "Rows in Footer: ", "GasT [\u00B0C]: ", "SampT [\u00B0C]: ", "col: ", "m: ", "b: ", "cerr: ",
-                     "perr: "):
+        for item in (" ", "t [s]: ", "Pres [Pa]: ", "Isolation Valve [1/0]: ", "Starting Row: ", "Rows in Footer: ",
+                     "GasT [\u00B0C]: ", "SampT [\u00B0C]: ", "col: ", "m: ", "b: ", "cerr: ", "perr: "):
             td[item] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
             tdt[item + "text"] = tk.Text(self, borderwidth=0, background=self.cget("background"), spacing3=1)
 
@@ -2216,10 +2264,9 @@ class PPSettingsHelp(tk.Toplevel):
                                   "depending on whether the first entry in the column is a datetime or a float/int. " +
                                   "The variables 'm' and 'b,' described further down, " +
                                   "are only applied to the time data if the data is composed of floats.")
-        tdt["PrimP [Pa]: text"].insert("insert", "Primary side pressure.")
-        tdt["SecP [Pa]: text"].insert("insert", "Secondary side pressure.")
+        tdt["Pres [Pa]: text"].insert("insert", "Pressure.")
         tdt["Isolation Valve [1/0]: text"].insert("insert", "The data describing whether the isolation valve is " +
-                                                  "closed (~0) or open (not ~0). Start of permeation is " +
+                                                  "closed (~0) or open (not ~0). Start of absorption is " +
                                                   "measured from when the valve first goes from closed to " +
                                                   "open.")
         tdt["Starting Row: text"].insert("insert", "The row at which the program starts reading data from the Excel " +
@@ -2228,7 +2275,8 @@ class PPSettingsHelp(tk.Toplevel):
         tdt["Rows in Footer: text"].insert("insert", "How many rows at the bottom of the file to ignore.")
         tdt["GasT [\u00B0C]: text"].insert("insert", "The thermocouples (TCs) that measure the gas's temperature. " +
                                                     "The number of TCs can be set arbitrarily via " +
-                                                    "'Number of TCs measuring GasT.'")
+                                                    "'Number of TCs measuring GasT0' and 'Number of TCs measuring " +
+                                                    "GasT,' each of which start counting with GasT1.")
         tdt["SampT [\u00B0C]: text"].insert("insert", "The thermocouple that measures the sample temperature.")
         tdt["col: text"].insert("insert", "Reference column for corresponding quantity in raw data file.")
         tdt["m: text"].insert("insert", "Every entry in the column of data is converted according to m*x + b, " +
@@ -2289,4 +2337,3 @@ class PPSettingsHelp(tk.Toplevel):
         self.deiconify()
         self.wait_window()
         return
-

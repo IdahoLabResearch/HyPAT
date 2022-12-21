@@ -4,7 +4,7 @@ from tkinter import ttk
 import numpy as np
 import pandas as pd
 import os
-import platform  # allows for Mac vs Windows adaptions
+import platform  # allows for Mac vs. Windows adaptions
 
 
 class Storage:
@@ -16,21 +16,21 @@ class Storage:
 
         # Create dataframes to store values for updating source spreadsheets.
         # First the material_data spreadsheet
-        filename = os.path.join('datafiles', 'material_data.xlsx')
+        filename = os.path.join('data_files', 'material_data.xlsx')
         self.material_data = pd.read_excel(filename, header=[0, 1],
                                            engine="openpyxl")  # openpyxl supports .xlsx but not .xls
         # set up the index using material names
         self.material_data.set_index(('Unnamed: 0_level_0', "Material"), inplace=True)
         self.material_data.rename_axis("Material", axis="index", inplace=True)
         # Next for the melting_tempK file
-        melt_filename = os.path.join('datafiles', 'melting_tempK.xlsx')
+        melt_filename = os.path.join('data_files', 'melting_tempK.xlsx')
         self.melting_tempK = pd.read_excel(melt_filename, engine="openpyxl")
         self.melting_tempK.set_index("Material", inplace=True)
 
         # Read the o-ring data off an Excel sheet into a convenient dataframe.
         # (1/2, 1/4 VCR data comes from https://www.swagelok.com/downloads/webcatalogs/en/ms-01-24.pdf,
         # page 17 Silver Plated Nonretained)
-        self.oring_filename = os.path.join('datafiles', 'o-ring_data.xlsx')
+        self.oring_filename = os.path.join('data_files', 'o-ring_data.xlsx')
         self.oring_info = pd.read_excel(self.oring_filename, header=0, index_col=0)
         self.oring_info_4file = self.oring_info.copy()  # Duplicate used exclusively for saving to the o-ring file
 
@@ -67,7 +67,7 @@ class Storage:
         self.sample_material.trace_add("write", self.update_properties)
 
         # Read the file for some default values
-        self.defaults_filename = os.path.join('datafiles', 'default_entry_vals.xlsx')
+        self.defaults_filename = os.path.join('data_files', 'default_entry_vals.xlsx')
         self.defaults_info = pd.read_excel(self.defaults_filename, header=0)
 
         # Calibrated Leak Rate
@@ -91,8 +91,8 @@ class Storage:
         self.t_L = tk.DoubleVar(value=0)  # Estimated time lag
         self.Phi = tk.DoubleVar(value=0)  # Estimated permeability
         self.flux = tk.DoubleVar(value=0)  # Estimated molar flux
-        self.flux_atoms = tk.DoubleVar(value=0)  # Estimated atomic flux
-        self.Q = tk.DoubleVar(value=0)  # Estimated permeation rate
+        self.flux_atoms = tk.DoubleVar(value=0)  # Estimated  atomic flux
+        self.Q = tk.DoubleVar(value=0)  # Estimated molecular permeation rate
         self.del_sP = tk.DoubleVar(value=0)  # Estimated rate of pressure increase, Torr/s
         self.del_sP_Pa = tk.DoubleVar(value=0)  # /\, Pa/s
         self.sP_final = tk.DoubleVar(value=0)  # Estimated final secondary side pressure, Torr
@@ -104,13 +104,15 @@ class Storage:
 
         # tolerance used for finding steady state during permeation data analysis
         self.tol = tk.DoubleVar(value=1e-6)
-        # minimum number of seconds following t0 before finding a steady state
-        self.t_del = tk.DoubleVar(value=100) 
-        # default number of data points used in determining leak and/or steady state
+        # minimum number of seconds following t0 before finding a steady state or equilibrium
+        self.t_del = tk.DoubleVar(value=100)  # Note, as of 5/28/22, this isn't used in absorption_plots.py
+        # default number of data points used in determining leak, steady state, and/or equilibrium
         self.gen_dp_range = tk.IntVar(value=30)
 
-        # store the permeation calculations
-        self.PermeationParameters = pd.DataFrame()
+        # store the transport properties calculations
+        self.TransportParameters = pd.DataFrame()
+        self.PTransportParameters = pd.DataFrame()
+        self.ATransportParameters = pd.DataFrame()
 
     def connect_variables(self):
         """ Set up variables so that functions are triggered if they are changed"""
@@ -146,10 +148,10 @@ class Storage:
             diffusivity and solubility. Use that information to calculate those respective number for permeability.
             Read in the melting temp if available. Combine this all into a dataframe and return that dataframe """
         # read in diffusivity and solubility data
-        # todo It'd be nice to have the user select a file similar to "SaveFileExample.xlsx" in the datafiles folder
+        # todo It'd be nice to have the user select a file similar to "SaveFileExample.xlsx" in the data_files folder
         #      then if two of the three quantities (diffusivity, solubility, permeability) are present, the third
         #      will be calculated. This can be similar to how it is done in overview_plots.py - EditMaterials class.
-        filename = os.path.join('datafiles', 'material_data.xlsx')
+        filename = os.path.join('data_files', 'material_data.xlsx')
         df = pd.read_excel(filename, header=[0, 1], engine="openpyxl")  # openpyxl supports .xlsx file format, not .xls
         # set up the index using material names
         df.set_index(('Unnamed: 0_level_0', "Material"), inplace=True)
@@ -170,7 +172,7 @@ class Storage:
         df[("Permeability", "max. temp. [K]")] = [min((df[col[3]][i], df[col[7]][i])) for i in range(len(df))]
 
         # read in melting temp data
-        melt_filename = os.path.join('datafiles', 'melting_tempK.xlsx')
+        melt_filename = os.path.join('data_files', 'melting_tempK.xlsx')
         df2 = pd.read_excel(melt_filename, engine="openpyxl")
         df2.set_index("Material", inplace=True)
 
