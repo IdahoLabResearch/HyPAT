@@ -20,7 +20,8 @@ from tkinter.filedialog import asksaveasfilename, askopenfilename
 import os
 from .data_storage import Widgets
 from pandas import DataFrame, read_excel
-
+import h_transport_materials as htm
+from .h_transport_data import diffusivities, solubilities, permeabilities, materials
 
 class Plots(tk.Frame):
 
@@ -29,7 +30,8 @@ class Plots(tk.Frame):
 
         # container for important variables
         self.storage = storage
-        self.index = list(self.storage.data.index)
+        # self.index = list(self.storage.data.index)
+        self.index = materials
         self.columns = list(self.storage.data.columns)
         self.item = {}  # Container for storing whether a material is selected for plotting
         self.exp_data = DataFrame()  # Container for data received from permeation_plots or absorption_plots
@@ -325,12 +327,13 @@ class Plots(tk.Frame):
             keys: index of the list of materials; list of strings containing all the names of materials added so far """
         # Add the material to the list of materials if it isn't on it
         if material not in keys:
-            # Determine whether the material is selected by default by checking if the melting point is included
-            if not np.isnan(self.storage.data.loc[material, self.columns[-1]]):
-                self.item[material] = tk.IntVar(value=1)  # Selected by default
-            else:
-                # NaN present for material without the melting points.
-                self.item[material] = tk.IntVar(value=0)  # Not selected by default
+            self.item[material] = tk.IntVar(value=1) # Selected by default
+            # # Determine whether the material is selected by default by checking if the melting point is included
+            # if not np.isnan(self.storage.data.loc[material, self.columns[-1]]):
+            #     self.item[material] = tk.IntVar(value=1)  # Selected by default
+            # else:
+            #     # NaN present for material without the melting points.
+            #     self.item[material] = tk.IntVar(value=0)  # Not selected by default
         # Set up the check button of the material
         self.check_buttons.append(tk.Checkbutton(self.button_frame, text=material, variable=self.item[material],
                                                  bg='grey93', command=self.plot))
@@ -486,19 +489,17 @@ class Plots(tk.Frame):
         Tmin_ext = 373.15
         Tmax_ext = 1473.15
         T2 = np.linspace(Tmin_ext, Tmax_ext)
-        for material in self.index:
+        for i, material in enumerate(materials):
             if self.item[material].get():  # if the material's check box is checked
-                for i in range(3):  # For diffusivity, solubility, and permeability
-                    val1 = self.storage.data.loc[material, self.columns[4*i+0]]  # D0, K0, P0
-                    val2 = self.storage.data.loc[material, self.columns[4*i+1]]  # E_D, E_K, E_P
-                    Tmin = self.storage.data.loc[material, self.columns[4*i+2]]
-                    Tmax = self.storage.data.loc[material, self.columns[4*i+3]]
+                for ax, group in zip(self.ax, [diffusivities, solubilities, permeabilities]):  # For diffusivity, solubility, and permeability
+                    prop = group.filter(material=material)[0]
+                    val1 = prop.pre_exp.magnitude
+                    val2 = prop.act_energy.to(htm.ureg.kJ * htm.ureg.mol**-1).magnitude
+                    Tmin, Tmax = prop.range
 
-                    T = np.linspace(Tmin, Tmax)
+                    T = np.linspace(Tmin.magnitude, Tmax.magnitude)
                     res = val1*np.exp(-val2/(R * T))  # data
                     res2 = val1 * np.exp(-val2 / (R * T2))  # extrapolated data
-
-                    ax = self.ax[i]
 
                     # dashed line for extrapolation, colored for data
                     a, = ax.semilogy(1000 / T2, res2, ':', color="lightgrey", label=material)
@@ -539,11 +540,11 @@ class Plots(tk.Frame):
         self.ax[0].set_ylabel(r"Diffusivity, $D_H\, ($m$^2\,$s$^{-1})$")
         self.ax[0].set_ylim(1e-12, 1e-7)
 
-        self.ax[1].set_ylabel(r"Solubility, $K_s\, ($mol m$^{-3}\,$Pa$^{-0.5})$")
-        self.ax[1].set_ylim(1e-8, 1e+5)
+        self.ax[1].set_ylabel(r"Solubility, $K_s\, ($H m$^{-3}\,$Pa$^{-0.5})$")
+        # self.ax[1].set_ylim(1e-8, 1e+5)
 
-        self.ax[2].set_ylabel(r"Permeability, $P_H\, ($mol m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5})$")
-        self.ax[2].set_ylim(1e-17, 1e-5)
+        self.ax[2].set_ylabel(r"Permeability, $P_H\, ($H m$^{-1}\, $s$^{-1}\, $Pa$^{-0.5})$")
+        # self.ax[2].set_ylim(1e-17, 1e-5)
         self.canvas.draw()
         self.toolbar.update()
 
