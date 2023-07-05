@@ -6,6 +6,7 @@ from .data_storage import Widgets
 import numpy as np
 import os
 import platform
+from .h_transport_data import materials
 
 
 class InputForm(tk.Frame):
@@ -77,9 +78,8 @@ class InputForm(tk.Frame):
 
         # Drop down menu for sample material
         self.add_text0(box1, text="Sample material:", subscript="", row=3)
-        self.storage.sample_material.set(self.storage.data.index[2])
-        self.input["sample_material"] = tk.OptionMenu(box1, self.storage.sample_material,
-                                                      *list(self.storage.data.index))
+        self.storage.sample_material.set(materials[0])
+        self.input["sample_material"] = tk.OptionMenu(box1, self.storage.sample_material, *materials)
         self.input["sample_material"].config(bg="yellow", indicatoron=False)
         self.input["sample_material"].grid(row=3, column=1, sticky="ew")
 

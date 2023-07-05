@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 import os
 import platform  # allows for Mac vs. Windows adaptions
-
+from .h_transport_data import materials, diffusivities, solubilities, permeabilities
+import h_transport_materials as htm
 
 class Storage:
     def __init__(self):
@@ -198,12 +199,17 @@ class Storage:
 
     def update_properties(self, *args):
         """ H mass transport properties depend on sample material """
-        self.D0.set(self.data.loc[self.sample_material.get(), ("Diffusivity", "D0 [m^2 s^-1]")])
-        self.E_D.set(self.data.loc[self.sample_material.get(), ("Diffusivity", "E_D [kJ mol^-1]")])
-        self.K0.set(self.data.loc[self.sample_material.get(), ("Solubility", "K0 [mol m^-3 Pa^-0.5]")])
-        self.E_K.set(self.data.loc[self.sample_material.get(), ("Solubility", "E_K [kJ mol^-1]")])
-        self.P0.set(self.data.loc[self.sample_material.get(), ("Permeability", "P0 [mol m^-1 s^-1 Pa^-0.5]")])
-        self.E_P.set(self.data.loc[self.sample_material.get(), ("Permeability", "E_P [kJ mol^-1]")])
+
+        diff = diffusivities.filter(material=self.sample_material.get())[0]
+        sol = solubilities.filter(material=self.sample_material.get())[0]
+        perm = permeabilities.filter(material=self.sample_material.get())[0]
+
+        self.D0.set(diff.pre_exp.magnitude)
+        self.E_D.set(diff.act_energy.to(htm.ureg.kJ*htm.ureg.mol**-1).magnitude)
+        self.K0.set(sol.pre_exp.to(htm.ureg.mol*htm.ureg.m**-3*htm.ureg.Pa**-0.5).magnitude)
+        self.E_K.set(sol.act_energy.to(htm.ureg.kJ*htm.ureg.mol**-1).magnitude)
+        self.P0.set(perm.pre_exp.to(htm.ureg.mol*htm.ureg.m**-1*htm.ureg.s**-1*htm.ureg.Pa**-0.5).magnitude)
+        self.E_P.set(perm.act_energy.to(htm.ureg.kJ*htm.ureg.mol**-1).magnitude)
 
         # Update other values using new transport properties
         self.update_pressure_values()
