@@ -119,8 +119,7 @@ solubility, and permeability for a material.
 
 Reference:
 
-M. Shimada, "Tritium Transport in Fusion Reactor Materials" in Comprehensive Nuclear Materials 6, Second Edition, 
-Elsevier (2020); https://doi.org/10.1016/B978-0-12-803581-8.11754-0
+HTM databse Delaporte-Mathurin, Rémi et al., [RemDelaporteMathurin/h-transport-materials](https://github.com/RemDelaporteMathurin/h-transport-materials), https://doig.org/10.5281/zenodo.7888448
 
 ### Usage: Predict Outcomes with "Permeation Estimates" Tab
 
@@ -151,7 +150,7 @@ Material" button on the "Overview Plots" tab.
 
 Python Interpreter: 3.8, 3.9, or 3.10
 
-Python Packages: Matplotlib, Pandas, NumPy, tkmacosx, mplcursors, SciPy, and openpyxl
+Python Packages: Matplotlib, Pandas, NumPy, tkmacosx, mplcursors, SciPy, openpyxl, h-transport-materials
 
 Compatible: macOS and Windows 10
 
