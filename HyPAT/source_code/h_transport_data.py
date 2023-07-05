@@ -1,5 +1,6 @@
 import h_transport_materials as htm
 
+data = {}
 
 # These are the materials we'll plot
 materials = [
@@ -29,22 +30,16 @@ materials = [
     htm.LIPB,
 ]
 
-# create 3 empty groups of properties
-diffusivities, solubilities, permeabilities = (
-    htm.PropertiesGroup(),
-    htm.PropertiesGroup(),
-    htm.PropertiesGroup(),
-)
-
 # iterate through the materials
 for mat in materials:
+    data[mat] = {}
     # get the first diffusivity and add it to the group
     diff = htm.diffusivities.filter(material=mat)[0]
-    diffusivities.append(diff)
+    data[mat]["diffusivity"] = diff
 
     # get the first solubility and add it to the group
     sol = htm.solubilities.filter(material=mat)[0]
-    solubilities.append(sol)
+    data[mat]["solubility"] = sol
 
     # some materials don't have a permeability in the database
 
@@ -68,4 +63,4 @@ for mat in materials:
         perm.range = diff.range
 
     # add the permeability to the group
-    permeabilities.append(perm)
+    data[mat]["permeability"] = perm

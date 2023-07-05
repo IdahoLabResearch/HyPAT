@@ -21,7 +21,7 @@ import os
 from .data_storage import Widgets
 from pandas import DataFrame, read_excel
 import h_transport_materials as htm
-from .h_transport_data import diffusivities, solubilities, permeabilities, materials
+from .h_transport_data import data
 
 class Plots(tk.Frame):
 
@@ -31,7 +31,7 @@ class Plots(tk.Frame):
         # container for important variables
         self.storage = storage
         # self.index = list(self.storage.data.index)
-        self.index = materials
+        self.index = list(data.keys())
         self.columns = list(self.storage.data.columns)
         self.item = {}  # Container for storing whether a material is selected for plotting
         self.exp_data = DataFrame()  # Container for data received from permeation_plots or absorption_plots
@@ -488,10 +488,10 @@ class Plots(tk.Frame):
         Tmin_ext = 373.15
         Tmax_ext = 1473.15
         T2 = np.linspace(Tmin_ext, Tmax_ext)
-        for i, material in enumerate(materials):
+        for i, material in enumerate(data.keys()):
             if self.item[material].get():  # if the material's check box is checked
-                for ax, group in zip(self.ax, [diffusivities, solubilities, permeabilities]):  # For diffusivity, solubility, and permeability
-                    prop = group.filter(material=material)[0]
+                for ax, group in zip(self.ax, ["diffusivity", "solubility", "permeability"]):  # For diffusivity, solubility, and permeability
+                    prop = data[material][group]
                     val1 = prop.pre_exp.magnitude
                     val2 = prop.act_energy.to(htm.ureg.kJ * htm.ureg.mol**-1).magnitude
                     Tmin, Tmax = prop.range

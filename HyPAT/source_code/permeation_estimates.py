@@ -6,7 +6,7 @@ from .data_storage import Widgets
 import numpy as np
 import os
 import platform
-from .h_transport_data import materials
+from .h_transport_data import data
 
 
 class InputForm(tk.Frame):
@@ -78,8 +78,8 @@ class InputForm(tk.Frame):
 
         # Drop down menu for sample material
         self.add_text0(box1, text="Sample material:", subscript="", row=3)
-        self.storage.sample_material.set(materials[0])
-        self.input["sample_material"] = tk.OptionMenu(box1, self.storage.sample_material, *materials)
+        self.storage.sample_material.set(list(data.keys())[0])
+        self.input["sample_material"] = tk.OptionMenu(box1, self.storage.sample_material, *list(data.keys()))
         self.input["sample_material"].config(bg="yellow", indicatoron=False)
         self.input["sample_material"].grid(row=3, column=1, sticky="ew")
 
@@ -91,7 +91,7 @@ class InputForm(tk.Frame):
         menu = self.input["sample_material"]["menu"]
         menu.delete(0, tk.END)
         # add new options
-        for material in materials:
+        for material in data.keys():
             menu.add_command(label=material, command=lambda value=material: self.storage.sample_material.set(value))
 
     def create_o_ring_input_frame(self, parent, row, column):

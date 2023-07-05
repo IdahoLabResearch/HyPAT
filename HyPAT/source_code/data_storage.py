@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import os
 import platform  # allows for Mac vs. Windows adaptions
-from .h_transport_data import materials, diffusivities, solubilities, permeabilities
+from .h_transport_data import data
 import h_transport_materials as htm
 
 class Storage:
@@ -200,9 +200,9 @@ class Storage:
     def update_properties(self, *args):
         """ H mass transport properties depend on sample material """
 
-        diff = diffusivities.filter(material=self.sample_material.get())[0]
-        sol = solubilities.filter(material=self.sample_material.get())[0]
-        perm = permeabilities.filter(material=self.sample_material.get())[0]
+        diff = data[self.sample_material.get()]["diffusivity"]
+        sol = data[self.sample_material.get()]["solubility"]
+        perm = data[self.sample_material.get()]["permeability"]
 
         self.D0.set(diff.pre_exp.magnitude)
         self.E_D.set(diff.act_energy.to(htm.ureg.kJ*htm.ureg.mol**-1).magnitude)
