@@ -474,8 +474,7 @@ class Plots(tk.Frame):
 
     def reference(self):
         """ Creates a message box with the overview plots reference inside """
-        tk.messagebox.showinfo(title=None, message='M. Shimada, “Tritium Transport in Fusion Reactor Materials” ' +
-                               'in Comprehensive Nuclear Materials 6, Second Edition, Elsevier (2020)')
+        tk.messagebox.showinfo(title=None, message=f'HTM databse v{htm.__version__} Delaporte-Mathurin, Rémi et al., github.com/RemDelaporteMathurin/h-transport-materials, DOI:10.5281/zenodo.7888448')
 
     def plot(self, *args):
         """ Plot the three graphs in overview plots """
