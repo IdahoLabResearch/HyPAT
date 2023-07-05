@@ -91,7 +91,7 @@ class InputForm(tk.Frame):
         menu = self.input["sample_material"]["menu"]
         menu.delete(0, tk.END)
         # add new options
-        for material in list(self.storage.data.index):
+        for material in materials:
             menu.add_command(label=material, command=lambda value=material: self.storage.sample_material.set(value))
 
     def create_o_ring_input_frame(self, parent, row, column):
