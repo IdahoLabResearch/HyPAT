@@ -288,13 +288,15 @@ class InputForm(tk.Frame):
         parent = tk.LabelFrame(self, text="FINAL OUTPUT", fg="blue", bd=10)
         self.add_text(parent, text="Estimated time-lag: t", subscript="L",
                       units="[sec]", tvar=self.storage.t_L, row=0)
+        self.add_text(parent, text="Estimated time to steady state: t", subscript="ss",
+                      units="[sec]", tvar=self.storage.tss, row=1)
         self.add_text(parent, text="Estimated permeation rate: Q", subscript="", subsubscript="",
                       units="[mol s\u207b\u00b9]",  # "[mol s^-1]",
-                      tvar=self.storage.Q, row=1)
+                      tvar=self.storage.Q, row=2)
         self.add_text(parent, text="Estimated pressure in QMS: P", subscript="", subsubscript="QMS",
-                      units="[Torr]", tvar=self.storage.p_QMS, row=2)
+                      units="[Torr]", tvar=self.storage.p_QMS, row=3)
         self.add_text(parent, text="Estimated final secondary pressure: sP", subscript="final",
-                      units="[Torr]", tvar=self.storage.sP_final, row=3)
+                      units="[Torr]", tvar=self.storage.sP_final, row=4)
 
         parent.config(font=self.named_font)
         parent.grid(row=row, column=column, sticky="nsew")
