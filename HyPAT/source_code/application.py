@@ -26,8 +26,8 @@ class Application(tk.Tk):
 
         # size of gui based off size of widgets
         # this could be calculated later but would result in the gui appearing then moving to the center.
-        width = 1429
-        height = 750
+        width = 1480
+        height = 790
         # position of top left corner of gui based on monitor resolution
         pos_right = int(self.winfo_screenwidth() / 2 - width / 2)
         pos_down = int(self.winfo_screenheight() / 2 - height / 2)

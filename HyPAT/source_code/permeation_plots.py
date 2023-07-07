@@ -50,6 +50,7 @@ class PermeationPlots(tk.Frame):
         # store widgets
         self.widgets = Widgets()
         self.add_text0 = self.widgets.add_text0
+        self.add_text = self.widgets.add_text
         self.add_text2 = self.widgets.add_text2
         self.add_entry = self.widgets.add_entry
         self.add_entry3 = self.widgets.add_entry3
@@ -151,6 +152,7 @@ class PermeationPlots(tk.Frame):
         self.Phi_label = tk.DoubleVar(value=0)
         self.D_label = tk.DoubleVar(value=0)
         self.K_label = tk.DoubleVar(value=0)
+        self.tss_label = tk.DoubleVar(value=0)
         self.Prate_err_label = tk.DoubleVar(value=0)
         self.F_err_label = tk.DoubleVar(value=0)
         self.Phi_err_label = tk.DoubleVar(value=0)
@@ -187,31 +189,33 @@ class PermeationPlots(tk.Frame):
                        units="[m\u00b2 s\u207b\u00b9]", row=label_row + 3)
         self.add_text2(self.frame, text="Solubility: K", subscript="s", tvar1=self.K_label, tvar2=self.K_err_label,
                        units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]", row=label_row + 4)
+        self.add_text(self.frame, text="Time to Steady State: t", subscript="ss", tvar=self.tss_label,
+                       units="[s]", row=label_row + 5)
 
         button_row = 10
         self.b0 = ttk.Button(self.frame, text='Choose folder', command=self.select_file)
-        self.b0.grid(row=button_row, column=1, sticky="ew")
+        self.b0.grid(row=button_row + 1, column=4, sticky="ew")
         b1 = ttk.Button(self.frame, text='Refresh', command=self.refresh_graphs)
-        b1.grid(row=button_row, column=3, sticky="ew")
+        b1.grid(row=button_row - 1, column=4, sticky="ew")
 
         settings_b = ttk.Button(self.frame, text='Settings', command=self.adjust_persistent_vars)
-        settings_b.grid(row=button_row, column=4, sticky="ew")
+        settings_b.grid(row=button_row - 1, column=3, sticky="ew")
 
         b2 = ttk.Button(self.frame, text='Close popout plots', command=lambda: plt.close('all'))
-        b2.grid(row=button_row + 1, column=1, sticky="ew")
+        b2.grid(row=button_row, column=4, sticky="ew")
 
         self.coord_b = ttk.Button(self.frame, text="Enable Coordinates", command=self.toggle_coordinates)
-        self.coord_b.grid(row=button_row + 1, column=3, sticky="ew")
+        self.coord_b.grid(row=button_row, column=3, sticky="ew")
 
         b3 = ttk.Button(self.frame, text='Save current figures', command=self.save_figures)
-        b3.grid(row=button_row + 1, column=4, sticky="w")
+        b3.grid(row=button_row, column=1, sticky="w")
 
-        menu_row = button_row + 2
+        menu_row = button_row + 1
         self.add_text0(self.frame, text="Current File:", subscript="", row=menu_row)
         # menu to choose which file to display
         self.current_file = tk.StringVar(value='No files yet')
         self.filemenu = tk.OptionMenu(self.frame, self.current_file, self.current_file.get())
-        self.filemenu.grid(row=menu_row, column=1, columnspan=4, sticky='ew')
+        self.filemenu.grid(row=menu_row, column=1, columnspan=3, sticky='ew')
         self.current_file.trace_add("write", self.generate_plots)
 
         # menu to choose which measurement (P, D, K, or flux) to display in bottom left graph
@@ -972,7 +976,7 @@ class PermeationPlots(tk.Frame):
         N = len(X)
         p = len(X.columns) + 1  # plus one because LinearRegression adds an intercept term
 
-        X_with_intercept = np.empty(shape=(N, p), dtype=np.float)
+        X_with_intercept = np.empty(shape=(N, p), dtype='float')
         X_with_intercept[:, 0] = 1
         X_with_intercept[:, 1:p] = X.values
 
@@ -1309,7 +1313,7 @@ class PermeationPlots(tk.Frame):
             [(-1) ** n * np.exp(-self.D[filename] * n ** 2 * np.pi ** 2 * (self.D_time[filename] + self.dt[filename]) /
                                 sl ** 2) for n in range(1, 20)]))
         if debug:
-            lhs = A * (Jt - J0) / (Jinf - J0)
+            lhs = self.A[filename] * (Jt - J0) / (Jinf - J0)
             plt.figure()
             plt.plot(lhs[1:], label='lhs')
             plt.plot(self.rhs_cf[filename][1:], label='rhs')
@@ -1372,6 +1376,7 @@ class PermeationPlots(tk.Frame):
         self.F_label.set(self.F[filename])
         self.D_label.set(self.D[filename])
         self.K_label.set(self.Ks[filename])
+        self.tss_label.set(self.tss[filename])
         self.Phi_err_label.set(self.Phi_err[filename])
         self.Prate_err_label.set(self.Prate_err[filename])
         self.F_err_label.set(self.F_err[filename])
