@@ -134,6 +134,7 @@ class PermeationPlots(tk.Frame):
         self.intercept = {}
         self.tlag = {}
         self.D = {}  # diffusivity
+        self.D_tlag = {}
         self.D_err = {}
         self.A = {}  # proportionality constant
         self.dt = {}  # additive time constant
@@ -151,6 +152,7 @@ class PermeationPlots(tk.Frame):
         self.F_label = tk.DoubleVar(value=0)
         self.Phi_label = tk.DoubleVar(value=0)
         self.D_label = tk.DoubleVar(value=0)
+        self.D_tlag_label = tk.DoubleVar(value=0)
         self.K_label = tk.DoubleVar(value=0)
         self.tss_label = tk.DoubleVar(value=0)
         self.Prate_err_label = tk.DoubleVar(value=0)
@@ -185,12 +187,14 @@ class PermeationPlots(tk.Frame):
         self.add_text2(self.frame, text="Permeability: \u03A6", subscript="", tvar1=self.Phi_label, tvar2=self.Phi_err_label,
                        units="[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",   # "[mol/msPa^0.5]"
                        row=label_row + 2)
-        self.add_text2(self.frame, text="Diffusivity: D", subscript="", tvar1=self.D_label, tvar2=self.D_err_label,
+        self.add_text2(self.frame, text="Diffusivity (Optimized): D", subscript="", tvar1=self.D_label, tvar2=self.D_err_label,
                        units="[m\u00b2 s\u207b\u00b9]", row=label_row + 3)
         self.add_text2(self.frame, text="Solubility: K", subscript="s", tvar1=self.K_label, tvar2=self.K_err_label,
                        units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]", row=label_row + 4)
         self.add_text(self.frame, text="Time to Steady State: t", subscript="ss", tvar=self.tss_label,
                        units="[s]", row=label_row + 5)
+        self.add_text(self.frame, text="Diffusivity (timelag): D", subscript="", tvar=self.D_tlag_label,
+                       units="[m\u00b2 s\u207b\u00b9]", row=label_row + 6)
 
         button_row = 10
         self.b0 = ttk.Button(self.frame, text='Choose folder', command=self.select_file)
@@ -208,7 +212,7 @@ class PermeationPlots(tk.Frame):
         self.coord_b.grid(row=button_row, column=3, sticky="ew")
 
         b3 = ttk.Button(self.frame, text='Save current figures', command=self.save_figures)
-        b3.grid(row=button_row, column=1, sticky="w")
+        b3.grid(row=button_row+2, column=3, sticky="w")
 
         menu_row = button_row + 1
         self.add_text0(self.frame, text="Current File:", subscript="", row=menu_row)
@@ -223,7 +227,7 @@ class PermeationPlots(tk.Frame):
         self.add_text0(self.frame, text="Current Measurement:", subscript="", row=menu_row + 1)
         self.PDK_menu = tk.OptionMenu(self.frame, self.current_variable, 'Permeability', 'Diffusivity',
                                       'Solubility', 'Flux')
-        self.PDK_menu.grid(row=menu_row + 1, column=1, columnspan=3, sticky='ew')
+        self.PDK_menu.grid(row=menu_row + 1, column=1, columnspan=2, sticky='ew')
         self.current_variable.trace_add("write", self.update_PDK_plot)
 
         b4 = ttk.Button(self.frame, text='Export to Excel', command=self.export_data)
@@ -1231,6 +1235,7 @@ class PermeationPlots(tk.Frame):
         # calculate diffusivity using time-lag method
         sl = self.sample_thickness.get() * 0.001  # converted to meters
         D = sl ** 2 / (6 * self.tlag[filename])
+        self.D_tlag[filename] = D
         if skipD:  # If skipping the calculations of D
             D = float("NaN")
 
@@ -1375,6 +1380,7 @@ class PermeationPlots(tk.Frame):
         self.Prate_label.set(self.Prate[filename])
         self.F_label.set(self.F[filename])
         self.D_label.set(self.D[filename])
+        self.D_tlag_label.set(self.D_tlag[filename])
         self.K_label.set(self.Ks[filename])
         self.tss_label.set(self.tss[filename])
         self.Phi_err_label.set(self.Phi_err[filename])
