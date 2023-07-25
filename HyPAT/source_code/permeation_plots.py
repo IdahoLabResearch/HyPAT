@@ -899,7 +899,7 @@ class PermeationPlots(tk.Frame):
         from scipy.signal import savgol_filter
         # Savitzky-Golay filter
         y = np.array(Data['SecP'])
-        SecP_filtered = pd.Series(savgol_filter(y, self.ss_range[filename], 1), name='SecP')
+        SecP_filtered = pd.Series(savgol_filter(y, self.ss_range[filename], 2), name='SecP')
         Data.update(SecP_filtered)
 
         n = len(Data)
