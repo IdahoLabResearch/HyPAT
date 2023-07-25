@@ -195,35 +195,33 @@ class PermeationPlots(tk.Frame):
                        units="[m\u00b2 s\u207b\u00b9]", row=label_row + 4)
         self.add_text2(self.frame, text="Solubility: K", subscript="s", tvar1=self.K_label, tvar2=self.K_err_label,
                        units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]", row=label_row + 5)
-        # self.add_text(self.frame, text="Time to Steady State: t", subscript="ss", tvar=self.tss_label,
-        #                units="[s]", row=label_row + 5)
-        # self.add_text(self.frame, text="Diffusivity (timelag): D", subscript="", tvar=self.D_tlag_label,
-        #                units="[m\u00b2 s\u207b\u00b9]", row=label_row + 6)
+        self.add_text(self.frame, text="Time to Steady State: t", subscript="ss", tvar=self.tss_label,
+                       units="[s]", row=label_row + 6)
 
         button_row = 10
         self.b0 = ttk.Button(self.frame, text='Choose folder', command=self.select_file)
-        self.b0.grid(row=button_row + 1, column=3, sticky="ew")
+        self.b0.grid(row=button_row + 2, column=4, sticky="ew")
         b1 = ttk.Button(self.frame, text='Refresh', command=self.refresh_graphs)
-        b1.grid(row=button_row, column=1, sticky="ew")
+        b1.grid(row=button_row, column=4, sticky="ew")
 
         settings_b = ttk.Button(self.frame, text='Settings', command=self.adjust_persistent_vars)
         settings_b.grid(row=button_row + 1, column=4, sticky="ew")
 
         b2 = ttk.Button(self.frame, text='Close popout plots', command=lambda: plt.close('all'))
-        b2.grid(row=button_row, column=4, sticky="ew")
+        b2.grid(row=button_row + 1, column=1, sticky="ew")
 
         self.coord_b = ttk.Button(self.frame, text="Enable Coordinates", command=self.toggle_coordinates)
         self.coord_b.grid(row=button_row, column=3, sticky="ew")
 
         b3 = ttk.Button(self.frame, text='Save current figures', command=self.save_figures)
-        b3.grid(row=button_row+2, column=3, sticky="w")
+        b3.grid(row=button_row + 1, column=3, sticky="w")
 
-        menu_row = button_row + 1
+        menu_row = button_row + 2
         self.add_text0(self.frame, text="Current File:", subscript="", row=menu_row)
         # menu to choose which file to display
         self.current_file = tk.StringVar(value='No files yet')
         self.filemenu = tk.OptionMenu(self.frame, self.current_file, self.current_file.get())
-        self.filemenu.grid(row=menu_row, column=1, columnspan=2, sticky='ew')
+        self.filemenu.grid(row=menu_row, column=1, columnspan=3, sticky='ew')
         self.current_file.trace_add("write", self.generate_plots)
 
         # menu to choose which measurement (P, D, K, or flux) to display in bottom left graph
@@ -231,7 +229,7 @@ class PermeationPlots(tk.Frame):
         self.add_text0(self.frame, text="Current Measurement:", subscript="", row=menu_row + 1)
         self.PDK_menu = tk.OptionMenu(self.frame, self.current_variable, 'Permeability', 'Diffusivity',
                                       'Solubility', 'Flux')
-        self.PDK_menu.grid(row=menu_row + 1, column=1, columnspan=2, sticky='ew')
+        self.PDK_menu.grid(row=menu_row + 1, column=1, columnspan=3, sticky='ew')
         self.current_variable.trace_add("write", self.update_PDK_plot)
 
         b4 = ttk.Button(self.frame, text='Export to Excel', command=self.export_data)
@@ -895,18 +893,23 @@ class PermeationPlots(tk.Frame):
         new_time = pd.Series(tnew, name='t')
         Data.update(new_time)
 
+        # Set the ss range to the general ss range (which is editable by the user) or to something that works better
+        self.ss_range[filename] = self.gen_ss_range.get()
+
+        from scipy.signal import savgol_filter
+        # Savitzky-Golay filter
+        y = np.array(Data['SecP'])
+        SecP_filtered = pd.Series(savgol_filter(y, self.ss_range[filename], 1), name='SecP')
+        Data.update(SecP_filtered)
+
         n = len(Data)
+
         # calculate numerical derivative of secondary pressure
         deriv = np.zeros(n)
-        for i in range(2):
+        for i in range(n - 1):
             deriv[i] = ((Data.loc[i + 1, 'SecP'] - Data.loc[i, 'SecP']) /
                         (Data.loc[i + 1, 't'] - Data.loc[i, 't']))
-        for i in range(2, n - 2):
-            # deriv[i] = ((Data.loc[i + 1, 'SecP'] - Data.loc[i, 'SecP']) /
-            #             (Data.loc[i + 1, 't'] - Data.loc[i, 't']))
-            deriv[i] = ((-Data.loc[i + 2, 'SecP'] + 8 * Data.loc[i + 1, 'SecP'] -
-                         8 * Data.loc[i - 1, 'SecP'] + Data.loc[i - 2, 'SecP']) / 
-                         12 * (Data.loc[i + 1, 't'] - Data.loc[i, 't']))
+            
         Data['dSecP'] = deriv.tolist()
 
         # rearrange last two columns so 'SecP' and 'dSecP' are adjacent
@@ -1045,19 +1048,17 @@ class PermeationPlots(tk.Frame):
                                 " range exceeded the limit of " + str(len(data['dSecP']) - self.t0[filename]) + \
                                 " data points. Steady state range set to " + str(self.ss_range[filename]) + \
                                 " data points.\n\n"
-
+            
         # determine the leak rate. self.leak_range points before opening, not including t0 (note that .loc is inclusive)
         self.pleak_lf[filename] = \
             self.get_rates(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 't'],
                            data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 'SecP'])
 
-        #from scipy.signal import savgol_filter
-        # Savitzky-Golay filter
-        #dSecP = pd.Series(savgol_filter(data['dSecP'], self.ss_range[filename], 4))
+
 
         # determine row number when steady state pressure rate is achieved, checking to ensure it is before the end of
         # the file and after the minimum time delay + t0
-        dSecP = data['dSecP'].rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
+        dSecP = data['dSecP']
         neg_dSecP = np.where(dSecP < 0)[0]  # List of all terms in dSecP which are less than 0
         # Minimum terms in a row required to determine if the pressure drop off was reached
         min_seq = max(self.ss_range[filename] // 2 - 1, 1)
