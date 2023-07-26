@@ -1052,7 +1052,7 @@ class PermeationPlots(tk.Frame):
 
         # determine row number when steady state pressure rate is achieved, checking to ensure it is before the end of
         # the file and after the minimum time delay + t0
-        dSecP = data['dSecP']
+        dSecP = data['dSecP'].rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
         neg_dSecP = np.where(dSecP < 0)[0]  # List of all terms in dSecP which are less than 0
         # Minimum terms in a row required to determine if the pressure drop off was reached
         min_seq = max(self.ss_range[filename] // 2 - 1, 1)
