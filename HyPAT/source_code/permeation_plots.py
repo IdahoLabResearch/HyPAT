@@ -893,24 +893,16 @@ class PermeationPlots(tk.Frame):
         new_time = pd.Series(tnew, name='t')
         Data.update(new_time)
 
-        #Python
-
-        # Set the ss range to the general ss range (which is editable by the user) or to something that works better
-        self.ss_range[filename] = self.gen_ss_range.get()
-
-        from scipy.signal import savgol_filter
-        # Savitzky-Golay filter
-        y = np.array(Data['SecP'])
-        SecP_filtered = pd.Series(savgol_filter(y, self.ss_range[filename], 2), name='SecP')
-        Data.update(SecP_filtered)
-
         n = len(Data)
 
         # calculate numerical derivative of secondary pressure
         deriv = np.zeros(n)
-        for i in range(n - 1):
-            deriv[i] = ((Data.loc[i + 1, 'SecP'] - Data.loc[i, 'SecP']) /
+        for i in range(2):
+            deriv[i] = ((Data.loc[i + 1, 'SecP'] + Data.loc[i, 'SecP']) /
                         (Data.loc[i + 1, 't'] - Data.loc[i, 't']))
+        for i in range(2, n - 2):
+            deriv[i] = ((-Data.loc[i + 2, 'SecP'] + 8*Data.loc[i + 1, 'SecP'] - 8*Data.loc[i - 1, 'SecP'] + 8*Data.loc[i - 2, 'SecP']) /
+                        12*(Data.loc[i + 1, 't'] - Data.loc[i, 't']))
             
         Data['dSecP'] = deriv.tolist()
 
