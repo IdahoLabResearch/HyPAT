@@ -893,6 +893,8 @@ class PermeationPlots(tk.Frame):
         new_time = pd.Series(tnew, name='t')
         Data.update(new_time)
 
+        #Python
+
         # Set the ss range to the general ss range (which is editable by the user) or to something that works better
         self.ss_range[filename] = self.gen_ss_range.get()
 
