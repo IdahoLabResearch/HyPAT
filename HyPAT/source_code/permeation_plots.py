@@ -901,7 +901,7 @@ class PermeationPlots(tk.Frame):
             deriv[i] = ((Data.loc[i + 1, 'SecP'] + Data.loc[i, 'SecP']) /
                         (Data.loc[i + 1, 't'] - Data.loc[i, 't']))
         for i in range(2, n - 2):
-            deriv[i] = ((-Data.loc[i + 2, 'SecP'] + 8*Data.loc[i + 1, 'SecP'] - 8*Data.loc[i - 1, 'SecP'] + 8*Data.loc[i - 2, 'SecP']) /
+            deriv[i] = ((-Data.loc[i + 2, 'SecP'] + 8*Data.loc[i + 1, 'SecP'] - 8*Data.loc[i - 1, 'SecP'] + Data.loc[i - 2, 'SecP']) /
                         12*(Data.loc[i + 1, 't'] - Data.loc[i, 't']))
             
         Data['dSecP'] = deriv.tolist()
