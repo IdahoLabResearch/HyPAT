@@ -904,7 +904,9 @@ class PermeationPlots(tk.Frame):
             deriv[i] = ((-Data.loc[i + 2, 'SecP'] + 8*Data.loc[i + 1, 'SecP'] - 8*Data.loc[i - 1, 'SecP'] + Data.loc[i - 2, 'SecP']) /
                         12*(Data.loc[i + 1, 't'] - Data.loc[i, 't']))
             
-        Data['dSecP'] = deriv.tolist()
+        from scipy.signal import savgol_filter
+        deriv_filtered = savgol_filter(deriv, 3, 1)
+        Data['dSecP'] = deriv_filtered.tolist()
 
         # rearrange last two columns so 'SecP' and 'dSecP' are adjacent
         cols = Data.columns.tolist()
