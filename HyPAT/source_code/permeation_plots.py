@@ -893,6 +893,15 @@ class PermeationPlots(tk.Frame):
         new_time = pd.Series(tnew, name='t')
         Data.update(new_time)
 
+        # Set the ss range to the general ss range (which is editable by the user) or to something that works better
+        self.ss_range[filename] = self.gen_ss_range.get()
+
+        from scipy.signal import savgol_filter
+        # Savitzky-Golay filter
+        y = np.array(Data['SecP'])
+        SecP_filtered = pd.Series(savgol_filter(y, self.ss_range[filename], 2), name='SecP')
+        Data.update(SecP_filtered)
+
         n = len(Data)
 
         # calculate numerical derivative of secondary pressure
@@ -903,10 +912,9 @@ class PermeationPlots(tk.Frame):
         for i in range(2, n - 2):
             deriv[i] = ((-Data.loc[i + 2, 'SecP'] + 8*Data.loc[i + 1, 'SecP'] - 8*Data.loc[i - 1, 'SecP'] + Data.loc[i - 2, 'SecP']) /
                         12*(Data.loc[i + 1, 't'] - Data.loc[i, 't']))
-            
-        from scipy.signal import savgol_filter
-        deriv_filtered = savgol_filter(deriv, 100, 3)
-        Data['dSecP'] = deriv_filtered.tolist()
+
+
+        Data['dSecP'] = deriv.tolist()
 
         # rearrange last two columns so 'SecP' and 'dSecP' are adjacent
         cols = Data.columns.tolist()
@@ -1054,7 +1062,7 @@ class PermeationPlots(tk.Frame):
 
         # determine row number when steady state pressure rate is achieved, checking to ensure it is before the end of
         # the file and after the minimum time delay + t0
-        dSecP = data['dSecP'].rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
+        dSecP = data['dSecP']#.rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
         neg_dSecP = np.where(dSecP < 0)[0]  # List of all terms in dSecP which are less than 0
         # Minimum terms in a row required to determine if the pressure drop off was reached
         min_seq = max(self.ss_range[filename] // 2 - 1, 1)
@@ -1095,8 +1103,8 @@ class PermeationPlots(tk.Frame):
                                           data.loc[self.t0[filename], 't'], 3)) + " s.\n\n"
 
         # Find the data point at which an equilibrium is reached
-        ddSecP = pd.Series((dSecP.loc[2:].to_numpy() - dSecP.loc[:len(dSecP) - 3].to_numpy()) /
-                           (data.loc[2:, 't'].to_numpy() - data.loc[:len(dSecP) - 3, 't'].to_numpy()))
+        ddSecP = pd.Series((-dSecP.loc[4:].to_numpy() + 8*dSecP.loc[3:len(dSecP)-2].to_numpy() - 8*dSecP.loc[1:len(dSecP)-4].to_numpy() + dSecP.loc[:len(dSecP)-5].to_numpy()) /
+                           12*(data.loc[4:, 't'].to_numpy() - data.loc[3:len(dSecP)-2, 't'].to_numpy()))
         ddSecP = ddSecP.rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
         zeros = np.where(abs(ddSecP) < self.ss_tol.get())[0]
         zeros = [z for z in zeros if self.t0[filename] + ss_del < z < ss_time_max - min_seq - 2]
