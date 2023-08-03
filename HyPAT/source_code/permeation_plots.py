@@ -106,6 +106,10 @@ class PermeationPlots(tk.Frame):
         self.A_perm_err = tk.DoubleVar(value=round(self.A_perm.get()*0.05, 13))
         self.sample_thickness_err = tk.DoubleVar(value=0.0009)
 
+        # variables for filtering
+        self.poly_deg = tk.IntVar(value=2) #number of polynomial for savitzky-golay filter
+        self.filter_win = tk.IntVar(value=20) #window size for filter
+
         # permeation variables
         self.t0 = {}  # time when isolation valve opens (s)
         self.tss = {}  # time when steady state pressure is achieved (s)
@@ -402,6 +406,13 @@ class PermeationPlots(tk.Frame):
             entry_frame.pack(side="left", padx=1)
             b = tk.Button(entry_frame, text='Steady State Variables', command=self.adjust_ss_vars)
             b.grid(row=0, column=4, sticky="w")
+
+        # Add a button that allows user input of filtering and smoothing variables
+        if title == 'Pressure vs. Time':
+            entry_frame = tk.Frame(toolbar)
+            entry_frame.pack(side="left", padx=1)
+            b = tk.Button(entry_frame, text='Filter and Smoothing', command=self.adjust_filter)
+            b.grid(row=0, column=5, sticky="w")
 
         # Store and turn off the capability to update the status bar
         self.message_function[ax] = toolbar.set_message
@@ -893,13 +904,12 @@ class PermeationPlots(tk.Frame):
         new_time = pd.Series(tnew, name='t')
         Data.update(new_time)
 
-        # Set the ss range to the general ss range (which is editable by the user) or to something that works better
-        self.ss_range[filename] = self.gen_ss_range.get()
-
         from scipy.signal import savgol_filter
         # Savitzky-Golay filter
         y = np.array(Data['SecP'])
-        SecP_filtered = pd.Series(savgol_filter(y, self.ss_range[filename], 2), name='SecP')
+        window = self.filter_win.get()
+        degree = self.poly_deg.get()
+        SecP_filtered = pd.Series(savgol_filter(y, window, degree), name='SecP')
         Data.update(SecP_filtered)
 
         n = len(Data)
@@ -948,6 +958,38 @@ class PermeationPlots(tk.Frame):
         # (as opposed to updating the graphs as well)
         if d and retry:
             self.get_persistent_vars()  # Loads data from the permeation input file-format file
+
+    def adjust_filter(self):
+        """ Function for calling the window for adjusting filtering variables for loading permeation data,
+            then update everything if desired """
+        popup = tk.Toplevel(self)
+        popup.wm_title("Adjust filter Variables")
+
+        # Place the popup window near the cursor
+        pos_right = self.winfo_pointerx()
+        pos_down = self.winfo_pointery()
+        popup.geometry("+{}+{}".format(pos_right, pos_down))
+
+        entry_frame = tk.Frame(popup)
+        entry_frame.pack(side="left", padx=1)
+        # Degree of polynomial
+        self.add_entry(popup, entry_frame, self.inputs, key="poly_deg",
+                       text="Polynomial Number", subscript='', units="",
+                       tvar=self.poly_deg, ent_w=8, in_window=True,
+                       command=lambda tvar, variable, key, pf:
+                       self.storage.check_for_number(tvar, variable, key, False, pf))
+        # Filter window size
+        self.add_entry(popup, entry_frame, self.inputs, key="filter_win",
+                       text="Filter Window Size", subscript='', units="",
+                       tvar=self.filter_win, ent_w=8, row=2, in_window=True,
+                       command=lambda tvar, variable, key, pf:
+                       self.storage.check_for_number(tvar, variable, key, False, pf))
+        
+        button_row = 5
+        b1 = ttk.Button(entry_frame, text='Close & Refresh', command=lambda: self.close_and_refresh(popup))
+        b1.grid(row=button_row, column=0, sticky="ew")
+        b2 = ttk.Button(entry_frame, text='Refresh', command=self.refresh_graphs)
+        b2.grid(row=button_row, column=2, sticky="ew")
 
     def adjust_ss_vars(self):
         """ Function for calling the window for adjusting steady state variables for loading permeation data,
