@@ -109,6 +109,7 @@ class PermeationPlots(tk.Frame):
         # variables for filtering
         self.poly_deg = tk.IntVar(value=2) #number of polynomial for savitzky-golay filter
         self.filter_win = tk.IntVar(value=20) #window size for filter
+        self.filter = True #do you want to filter the data
 
         # permeation variables
         self.t0 = {}  # time when isolation valve opens (s)
@@ -904,13 +905,15 @@ class PermeationPlots(tk.Frame):
         new_time = pd.Series(tnew, name='t')
         Data.update(new_time)
 
-        from scipy.signal import savgol_filter
-        # Savitzky-Golay filter
-        y = np.array(Data['SecP'])
-        window = self.filter_win.get()
-        degree = self.poly_deg.get()
-        SecP_filtered = pd.Series(savgol_filter(y, window, degree), name='SecP')
-        Data.update(SecP_filtered)
+
+        if self.filter==True: #only turn on the filter if the switch is on
+            from scipy.signal import savgol_filter
+            # Savitzky-Golay filter
+            y = np.array(Data['SecP'])
+            window = self.filter_win.get()
+            degree = self.poly_deg.get()
+            SecP_filtered = pd.Series(savgol_filter(y, window, degree), name='SecP')
+            Data.update(SecP_filtered)
 
         n = len(Data)
 
@@ -972,24 +975,40 @@ class PermeationPlots(tk.Frame):
 
         entry_frame = tk.Frame(popup)
         entry_frame.pack(side="left", padx=1)
+
+        #Make a toggle switch for filtering
+        def Simpletoggle():
+            if toggle_button.config('text')[-1] == 'ON':
+                toggle_button.config(text='OFF')
+                self.filter = False
+            else:
+                toggle_button.config(text='ON')
+                self.filter = True
+
+        toggle_button = ttk.Button(entry_frame, text="ON", command=Simpletoggle)
+        toggle_button.grid(row=1, column=1, sticky='ew')
+        savgol_label = ttk.Label(entry_frame, text='Savitzky-Golay Filter')
+        savgol_label.grid(row=1, column=0)
+
         # Degree of polynomial
         self.add_entry(popup, entry_frame, self.inputs, key="poly_deg",
-                       text="Polynomial Number", subscript='', units="",
-                       tvar=self.poly_deg, ent_w=8, in_window=True,
+                       text="Polynomial Number:", subscript='', units="",
+                       tvar=self.poly_deg, ent_w=8, row=2, in_window=True,
                        command=lambda tvar, variable, key, pf:
                        self.storage.check_for_number(tvar, variable, key, False, pf))
         # Filter window size
         self.add_entry(popup, entry_frame, self.inputs, key="filter_win",
-                       text="Filter Window Size", subscript='', units="",
-                       tvar=self.filter_win, ent_w=8, row=2, in_window=True,
+                       text="Filter Window Size:", subscript='', units="",
+                       tvar=self.filter_win, ent_w=8, row=3, in_window=True,
                        command=lambda tvar, variable, key, pf:
                        self.storage.check_for_number(tvar, variable, key, False, pf))
         
-        button_row = 5
+        button_row = 6
         b1 = ttk.Button(entry_frame, text='Close & Refresh', command=lambda: self.close_and_refresh(popup))
         b1.grid(row=button_row, column=0, sticky="ew")
         b2 = ttk.Button(entry_frame, text='Refresh', command=self.refresh_graphs)
         b2.grid(row=button_row, column=2, sticky="ew")
+        tk.mainloop()
 
     def adjust_ss_vars(self):
         """ Function for calling the window for adjusting steady state variables for loading permeation data,
