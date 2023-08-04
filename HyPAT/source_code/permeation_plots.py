@@ -18,6 +18,7 @@ import platform  # allows for Mac vs. Windows adaptions
 # make certain warnings appear as errors, allowing them to be caught using a try/except clause
 import warnings
 from scipy.optimize import OptimizeWarning
+from scipy.signal import savgol_filter
 warnings.simplefilter("error", OptimizeWarning)
 
 
@@ -109,7 +110,8 @@ class PermeationPlots(tk.Frame):
         # variables for filtering
         self.poly_deg = tk.IntVar(value=2) #number of polynomial for savitzky-golay filter
         self.filter_win = tk.IntVar(value=20) #window size for filter
-        self.filter = True #do you want to filter the data
+        self.filter = True #boolean that controls the Savgol filter
+        self.rolling = False #boolean that controls the rolling average toggle switch
 
         # permeation variables
         self.t0 = {}  # time when isolation valve opens (s)
@@ -907,22 +909,22 @@ class PermeationPlots(tk.Frame):
 
 
         if self.filter==True: #only turn on the filter if the switch is on
-            from scipy.signal import savgol_filter
-            # Savitzky-Golay filter
-            y = np.array(Data['SecP'])
-            window = self.filter_win.get()
-            degree = self.poly_deg.get()
-            SecP_filtered = pd.Series(savgol_filter(y, window, degree), name='SecP')
-            Data.update(SecP_filtered)
+            y = np.array(Data['SecP']) #turn the secondary pressure data into an array
+            window = self.filter_win.get() #get the window size (default is 20)
+            degree = self.poly_deg.get() #get the polynomial degree size (default is 2)
+            SecP_filtered = pd.Series(savgol_filter(y, window, degree), name='SecP') # Savitzky-Golay filter
+            Data.update(SecP_filtered) #update the data frame with the filtered pressures
 
         n = len(Data)
 
         # calculate numerical derivative of secondary pressure
         deriv = np.zeros(n)
         for i in range(2):
+            #the first two points don't matter, hold their place with just a basic right hand derivative
             deriv[i] = ((Data.loc[i + 1, 'SecP'] + Data.loc[i, 'SecP']) /
                         (Data.loc[i + 1, 't'] - Data.loc[i, 't']))
         for i in range(2, n - 2):
+            #use the 5-point stencil to calculate the derivative
             deriv[i] = ((-Data.loc[i + 2, 'SecP'] + 8*Data.loc[i + 1, 'SecP'] - 8*Data.loc[i - 1, 'SecP'] + Data.loc[i - 2, 'SecP']) /
                         12*(Data.loc[i + 1, 't'] - Data.loc[i, 't']))
 
@@ -976,34 +978,50 @@ class PermeationPlots(tk.Frame):
         entry_frame = tk.Frame(popup)
         entry_frame.pack(side="left", padx=1)
 
+        #Make a toggle switch for turning on and off the rolling average
+        def Rolling_toggle():
+            if rolling_button.config('text')[-1] == 'ON':
+                rolling_button.config(text='OFF')
+                self.rolling = False
+            else:
+                rolling_button.config(text='ON')
+                self.rolling = True
+
+        #put the rolling average toggle switch on the frame
+        rolling_button = ttk.Button(entry_frame, text="OFF", command=Rolling_toggle)
+        rolling_button.grid(row=1, column=1, sticky='ew')
+        savgol_label = ttk.Label(entry_frame, text='Rolling Average')
+        savgol_label.grid(row=1, column=0)
+
         #Make a toggle switch for filtering
-        def Simpletoggle():
-            if toggle_button.config('text')[-1] == 'ON':
-                toggle_button.config(text='OFF')
+        def Savgol_toggle():
+            if savgol_toggle_button.config('text')[-1] == 'ON':
+                savgol_toggle_button.config(text='OFF')
                 self.filter = False
             else:
-                toggle_button.config(text='ON')
+                savgol_toggle_button.config(text='ON')
                 self.filter = True
 
-        toggle_button = ttk.Button(entry_frame, text="ON", command=Simpletoggle)
-        toggle_button.grid(row=1, column=1, sticky='ew')
+        #put the filter toggel switch on the page
+        savgol_toggle_button = ttk.Button(entry_frame, text="ON", command=Savgol_toggle)
+        savgol_toggle_button.grid(row=2, column=1, sticky='ew')
         savgol_label = ttk.Label(entry_frame, text='Savitzky-Golay Filter')
-        savgol_label.grid(row=1, column=0)
+        savgol_label.grid(row=2, column=0)
 
         # Degree of polynomial
         self.add_entry(popup, entry_frame, self.inputs, key="poly_deg",
                        text="Polynomial Number:", subscript='', units="",
-                       tvar=self.poly_deg, ent_w=8, row=2, in_window=True,
+                       tvar=self.poly_deg, ent_w=8, row=3, in_window=True,
                        command=lambda tvar, variable, key, pf:
                        self.storage.check_for_number(tvar, variable, key, False, pf))
         # Filter window size
         self.add_entry(popup, entry_frame, self.inputs, key="filter_win",
                        text="Filter Window Size:", subscript='', units="",
-                       tvar=self.filter_win, ent_w=8, row=3, in_window=True,
+                       tvar=self.filter_win, ent_w=8, row=4, in_window=True,
                        command=lambda tvar, variable, key, pf:
                        self.storage.check_for_number(tvar, variable, key, False, pf))
         
-        button_row = 6
+        button_row = 7
         b1 = ttk.Button(entry_frame, text='Close & Refresh', command=lambda: self.close_and_refresh(popup))
         b1.grid(row=button_row, column=0, sticky="ew")
         b2 = ttk.Button(entry_frame, text='Refresh', command=self.refresh_graphs)
@@ -1043,10 +1061,10 @@ class PermeationPlots(tk.Frame):
                        self.storage.check_for_number(tvar, variable, key, False, pf))
         # Number of data points used in determining the steady state and max time
         self.add_entry(popup, entry_frame, self.inputs, key="ss_range",
-                       text="Steady State Range:", subscript='', units="data points",
-                       tvar=self.gen_ss_range, ent_w=8, row=4, in_window=True,
-                       command=lambda tvar, variable, key, pf:
-                       self.storage.check_for_number(tvar, variable, key, False, pf))
+                    text="Steady State Range:", subscript='', units="data points",
+                    tvar=self.gen_ss_range, ent_w=8, row=4, in_window=True,
+                    command=lambda tvar, variable, key, pf:
+                    self.storage.check_for_number(tvar, variable, key, False, pf))
 
         button_row = 5
         b1 = ttk.Button(entry_frame, text='Close & Refresh', command=lambda: self.close_and_refresh(popup))
@@ -1118,12 +1136,13 @@ class PermeationPlots(tk.Frame):
         self.pleak_lf[filename] = \
             self.get_rates(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 't'],
                            data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 'SecP'])
-
-
-
+        
         # determine row number when steady state pressure rate is achieved, checking to ensure it is before the end of
         # the file and after the minimum time delay + t0
-        dSecP = data['dSecP']#.rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
+        if self.rolling==False:
+            dSecP = data['dSecP']
+        else:
+            dSecP = data['dSecP'].rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
         neg_dSecP = np.where(dSecP < 0)[0]  # List of all terms in dSecP which are less than 0
         # Minimum terms in a row required to determine if the pressure drop off was reached
         min_seq = max(self.ss_range[filename] // 2 - 1, 1)
