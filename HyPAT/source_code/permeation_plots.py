@@ -103,9 +103,9 @@ class PermeationPlots(tk.Frame):
             np.pi * (inner_diameter / 2 * 0.001) ** 2)  # Provides a way to round to sig figs
         self.A_perm.set(float(A_perm_str))
         # Variables for storing uncertainty, rounded to avoid numerical errors
-        self.volume_err = tk.DoubleVar(value=4.56e-6)
+        self.volume_err = tk.DoubleVar(value=round(self.volume.get()*0.05, 13))
         self.A_perm_err = tk.DoubleVar(value=round(self.A_perm.get()*0.05, 13))
-        self.sample_thickness_err = tk.DoubleVar(value=0.0009)
+        self.sample_thickness_err = tk.DoubleVar(value=round(self.sample_thickness.get()*0.05, 13))
 
         # variables for filtering
         self.poly_deg = tk.IntVar(value=2) #number of polynomial for savitzky-golay filter
