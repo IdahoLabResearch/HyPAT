@@ -157,7 +157,26 @@ Compatible: macOS and Windows 10
 
 ## Plans
 
-There are no current updates planned for HyPAT. 
+There are no current updates planned for HyPAT.
+
+## Recent Updates 08/04/2023
+
+The most recent updates made on this branch of HyPAT are made by contributor Nathan Gehmlich. the updates are as follows:
+
+### Update: Time scale on plots
+The plots of "pressure v time" and "permeability v time" had arbitrary units of time given by the data collecting computer. This recent update takes the first recorded time from the data file and subtracts this time from all other recorded times. This sets the first time as t=0 seconds and all others following that. The plots then use this updated scale to be more readable. This timescale is also helpful in calculating the diffusivity uncertainty in the time lag method.
+
+### Update: New Outputs
+In order to better compare the diffusivity calculated from the time lag method and the optimized method, the update includes two diffusivity outputs calculated from both methods. The time lag diffusivity was already calculated in the code, new code was implemented to find the time lag diffusivity uncertainty. This uncertainty was found using propagation of uncertainty from the x intercept. This code can be found in lines 1336-1346 in permeation_plots.py.
+
+Another output added was the time to steady state, this was included for the purpose of comparing the estimated time to steady state from the estimates tab. 
+
+### Update: Improved Derivative (5-point)
+In this update, a new way to calculate the pressure derivative was used. The previous method only relied on a single point and the point ahead of it. This improved derivative is commonly called the "5-point stencil," it takes the derivative based on the 2 points ahead and behind the point that is beign differentiated. This method allows for more accuracy in numerically differentiating.
+
+### Update: Filter and Smoothing tab
+In this update, an option to filter the original secondary pressure data can be applied to smooth the data more and significantly decreases the uncertainty in the optimized diffusivity calculation. The filter used is the "Savitzky-Golay filter." This filter fits windows of this data to a polynomial of a desired degree. The window size as well as the degree of the polynomial can be adjusted to the users liking on the "Filter and Smoothing" tab. Playing with the window size and polynomial degree, the lowest amount of uncertainty was found with a 2nd degree polynomial and a window size of about 20. This tab also allows to turn on and off the filter completely as well as the rolling average smoothing that occurs. (This Rolling average was the only data smoothing that was used before adding the filter option function.)
+Note: The toggle switch that allows for the on/off feature of the rolling average only applies to the first derivative of the secondary pressure. The second derivative is also calculated in finding the steady state, however the rolling average is always present to this deriviative in this stage of the code.
 
 ## Contribution Guidelines
  
@@ -173,10 +192,12 @@ Thomas Fuerst
 
 Chase Taylor 
 
+Nathan Gehmlich
+
 Joey Watkins (https://github.com/joeymwatkins) built most of the original functionality. George Evans 
 (https://github.com/GeorgeEvans0) added the "Absorption Plots" tab, cleaned up errors, made visual changes, and 
 added functionality. Thomas Fuerst (https://github.com/FuerstT) was the primary supervisor over this project, with Chase 
-Taylor (https://github.com/taylchas) as secondary supervisor.
+Taylor (https://github.com/taylchas) as secondary supervisor. Nathan Gehmlich (https://github.com/BigNate7) provided updates to the code as of 08/15/23.
 
 This work was prepared for the U.S. Department of Energy, Office of Fusion Energy Sciences, under the DOE Idaho Field 
 Office contract number DE-AC07–05ID14517.

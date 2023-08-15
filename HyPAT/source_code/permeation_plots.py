@@ -18,6 +18,7 @@ import platform  # allows for Mac vs. Windows adaptions
 # make certain warnings appear as errors, allowing them to be caught using a try/except clause
 import warnings
 from scipy.optimize import OptimizeWarning
+from scipy.signal import savgol_filter
 warnings.simplefilter("error", OptimizeWarning)
 
 
@@ -50,6 +51,7 @@ class PermeationPlots(tk.Frame):
         # store widgets
         self.widgets = Widgets()
         self.add_text0 = self.widgets.add_text0
+        self.add_text = self.widgets.add_text
         self.add_text2 = self.widgets.add_text2
         self.add_entry = self.widgets.add_entry
         self.add_entry3 = self.widgets.add_entry3
@@ -105,6 +107,12 @@ class PermeationPlots(tk.Frame):
         self.A_perm_err = tk.DoubleVar(value=round(self.A_perm.get()*0.05, 13))
         self.sample_thickness_err = tk.DoubleVar(value=round(self.sample_thickness.get()*0.05, 13))
 
+        # variables for filtering
+        self.poly_deg = tk.IntVar(value=2) #number of polynomial for savitzky-golay filter
+        self.filter_win = tk.IntVar(value=20) #window size for filter
+        self.filter = True #boolean that controls the Savgol filter
+        self.rolling = False #boolean that controls the rolling average toggle switch
+
         # permeation variables
         self.t0 = {}  # time when isolation valve opens (s)
         self.tss = {}  # time when steady state pressure is achieved (s)
@@ -134,6 +142,8 @@ class PermeationPlots(tk.Frame):
         self.tlag = {}
         self.D = {}  # diffusivity
         self.D_err = {}
+        self.D_tlag = {}
+        self.D_tlag_err = {}
         self.A = {}  # proportionality constant
         self.dt = {}  # additive time constant
         self.D_time = {}  # time over which D is calculated
@@ -150,11 +160,14 @@ class PermeationPlots(tk.Frame):
         self.F_label = tk.DoubleVar(value=0)
         self.Phi_label = tk.DoubleVar(value=0)
         self.D_label = tk.DoubleVar(value=0)
+        self.D_tlag_label = tk.DoubleVar(value=0)
         self.K_label = tk.DoubleVar(value=0)
+        self.tss_label = tk.DoubleVar(value=0)
         self.Prate_err_label = tk.DoubleVar(value=0)
         self.F_err_label = tk.DoubleVar(value=0)
         self.Phi_err_label = tk.DoubleVar(value=0)
         self.D_err_label = tk.DoubleVar(value=0)
+        self.D_tlag_err_label = tk.DoubleVar(value=0)
         self.K_err_label = tk.DoubleVar(value=0)
 
         # add frames and buttons to view important variables
@@ -183,35 +196,39 @@ class PermeationPlots(tk.Frame):
         self.add_text2(self.frame, text="Permeability: \u03A6", subscript="", tvar1=self.Phi_label, tvar2=self.Phi_err_label,
                        units="[mol m\u207b\u00b9 s\u207b\u00b9 Pa\u207b\u2070\u1427\u2075]",   # "[mol/msPa^0.5]"
                        row=label_row + 2)
-        self.add_text2(self.frame, text="Diffusivity: D", subscript="", tvar1=self.D_label, tvar2=self.D_err_label,
+        self.add_text2(self.frame, text="Diffusivity (Optimized): D", subscript="", tvar1=self.D_label, tvar2=self.D_err_label,
                        units="[m\u00b2 s\u207b\u00b9]", row=label_row + 3)
+        self.add_text2(self.frame, text="Diffusivity (timelag): D", subscript="", tvar1=self.D_tlag_label, tvar2=self.D_tlag_err_label,
+                       units="[m\u00b2 s\u207b\u00b9]", row=label_row + 4)
         self.add_text2(self.frame, text="Solubility: K", subscript="s", tvar1=self.K_label, tvar2=self.K_err_label,
-                       units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]", row=label_row + 4)
+                       units="[mol m\u207b\u00B3 Pa\u207b\u2070\u1427\u2075]", row=label_row + 5)
+        self.add_text(self.frame, text="Time to Steady State: t", subscript="ss", tvar=self.tss_label,
+                       units="[s]", row=label_row + 6)
 
         button_row = 10
         self.b0 = ttk.Button(self.frame, text='Choose folder', command=self.select_file)
-        self.b0.grid(row=button_row, column=1, sticky="ew")
+        self.b0.grid(row=button_row + 2, column=4, sticky="ew")
         b1 = ttk.Button(self.frame, text='Refresh', command=self.refresh_graphs)
-        b1.grid(row=button_row, column=3, sticky="ew")
+        b1.grid(row=button_row, column=4, sticky="ew")
 
         settings_b = ttk.Button(self.frame, text='Settings', command=self.adjust_persistent_vars)
-        settings_b.grid(row=button_row, column=4, sticky="ew")
+        settings_b.grid(row=button_row + 1, column=4, sticky="ew")
 
         b2 = ttk.Button(self.frame, text='Close popout plots', command=lambda: plt.close('all'))
         b2.grid(row=button_row + 1, column=1, sticky="ew")
 
         self.coord_b = ttk.Button(self.frame, text="Enable Coordinates", command=self.toggle_coordinates)
-        self.coord_b.grid(row=button_row + 1, column=3, sticky="ew")
+        self.coord_b.grid(row=button_row, column=3, sticky="ew")
 
         b3 = ttk.Button(self.frame, text='Save current figures', command=self.save_figures)
-        b3.grid(row=button_row + 1, column=4, sticky="w")
+        b3.grid(row=button_row + 1, column=3, sticky="w")
 
         menu_row = button_row + 2
         self.add_text0(self.frame, text="Current File:", subscript="", row=menu_row)
         # menu to choose which file to display
         self.current_file = tk.StringVar(value='No files yet')
         self.filemenu = tk.OptionMenu(self.frame, self.current_file, self.current_file.get())
-        self.filemenu.grid(row=menu_row, column=1, columnspan=4, sticky='ew')
+        self.filemenu.grid(row=menu_row, column=1, columnspan=3, sticky='ew')
         self.current_file.trace_add("write", self.generate_plots)
 
         # menu to choose which measurement (P, D, K, or flux) to display in bottom left graph
@@ -392,6 +409,13 @@ class PermeationPlots(tk.Frame):
             entry_frame.pack(side="left", padx=1)
             b = tk.Button(entry_frame, text='Steady State Variables', command=self.adjust_ss_vars)
             b.grid(row=0, column=4, sticky="w")
+
+        # Add a button that allows user input of filtering and smoothing variables
+        if title == 'Pressure vs. Time':
+            entry_frame = tk.Frame(toolbar)
+            entry_frame.pack(side="left", padx=1)
+            b = tk.Button(entry_frame, text='Filter and Smoothing', command=self.adjust_filter)
+            b.grid(row=0, column=5, sticky="w")
 
         # Store and turn off the capability to update the status bar
         self.message_function[ax] = toolbar.set_message
@@ -620,8 +644,12 @@ class PermeationPlots(tk.Frame):
                  "Permeability Uncertainty [mol m^-1 s^-1 Pa^-0.5]": self.Phi_err[filename],
                  "Diffusivity [m^2 s^-1]": self.D[filename],
                  "Diffusivity Uncertainty [m^2 s^-1]": self.D_err[filename],
+                 "Diffusivity (timelag) [m^2 s^-1]": self.D_tlag[filename],
+                 "Diffusivity (timelag) Uncertainty [m^2 s^-1]": self.D_tlag_err[filename],
                  "Solubility [mol m^-3 Pa^-0.5]": self.Ks[filename],
                  "Solubility Uncertainty [mol m^-3 Pa^-0.5]": self.Ks_err[filename],
+                 "Flux [mol m^-2 s^-1]": self.F[filename],
+                 "Flux Uncertainty [mol m^-2 s^-1]": self.F_err[filename],
                  "Proportionality Constant A": self.A[filename],
                  "Additive Time Constant dt [s]": self.dt[filename]
                  }, index=[filename]
@@ -872,12 +900,35 @@ class PermeationPlots(tk.Frame):
             new_header = [x for _, x in sorted(zip(self.needed_cols, self.header))]
             Data.columns = new_header
 
+        #update the time in column A
+        t_0 = Data.loc[0,'t']
+        tOld = np.array(Data['t'])
+        tnew = tOld - t_0
+        new_time = pd.Series(tnew, name='t')
+        Data.update(new_time)
+
+
+        if self.filter==True: #only turn on the filter if the switch is on
+            y = np.array(Data['SecP']) #turn the secondary pressure data into an array
+            window = self.filter_win.get() #get the window size (default is 20)
+            degree = self.poly_deg.get() #get the polynomial degree size (default is 2)
+            SecP_filtered = pd.Series(savgol_filter(y, window, degree), name='SecP') # Savitzky-Golay filter
+            Data.update(SecP_filtered) #update the data frame with the filtered pressures
+
         n = len(Data)
+
         # calculate numerical derivative of secondary pressure
         deriv = np.zeros(n)
-        for i in range(n - 1):
-            deriv[i] = ((Data.loc[i + 1, 'SecP'] - Data.loc[i, 'SecP']) /
+        for i in range(2):
+            #the first two points don't matter, hold their place with just a basic right hand derivative
+            deriv[i] = ((Data.loc[i + 1, 'SecP'] + Data.loc[i, 'SecP']) /
                         (Data.loc[i + 1, 't'] - Data.loc[i, 't']))
+        for i in range(2, n - 2):
+            #use the 5-point stencil to calculate the derivative
+            deriv[i] = ((-Data.loc[i + 2, 'SecP'] + 8*Data.loc[i + 1, 'SecP'] - 8*Data.loc[i - 1, 'SecP'] + Data.loc[i - 2, 'SecP']) /
+                        12*(Data.loc[i + 1, 't'] - Data.loc[i, 't']))
+
+
         Data['dSecP'] = deriv.tolist()
 
         # rearrange last two columns so 'SecP' and 'dSecP' are adjacent
@@ -913,6 +964,70 @@ class PermeationPlots(tk.Frame):
         if d and retry:
             self.get_persistent_vars()  # Loads data from the permeation input file-format file
 
+    def adjust_filter(self):
+        """ Function for calling the window for adjusting filtering variables for loading permeation data,
+            then update everything if desired """
+        popup = tk.Toplevel(self)
+        popup.wm_title("Adjust filter Variables")
+
+        # Place the popup window near the cursor
+        pos_right = self.winfo_pointerx()
+        pos_down = self.winfo_pointery()
+        popup.geometry("+{}+{}".format(pos_right, pos_down))
+
+        entry_frame = tk.Frame(popup)
+        entry_frame.pack(side="left", padx=1)
+
+        #Make a toggle switch for turning on and off the rolling average
+        def Rolling_toggle():
+            if rolling_button.config('text')[-1] == 'ON':
+                rolling_button.config(text='OFF')
+                self.rolling = False
+            else:
+                rolling_button.config(text='ON')
+                self.rolling = True
+
+        #put the rolling average toggle switch on the frame
+        rolling_button = ttk.Button(entry_frame, text="OFF", command=Rolling_toggle)
+        rolling_button.grid(row=1, column=1, sticky='ew')
+        savgol_label = ttk.Label(entry_frame, text='Rolling Average')
+        savgol_label.grid(row=1, column=0)
+
+        #Make a toggle switch for filtering
+        def Savgol_toggle():
+            if savgol_toggle_button.config('text')[-1] == 'ON':
+                savgol_toggle_button.config(text='OFF')
+                self.filter = False
+            else:
+                savgol_toggle_button.config(text='ON')
+                self.filter = True
+
+        #put the filter toggel switch on the page
+        savgol_toggle_button = ttk.Button(entry_frame, text="ON", command=Savgol_toggle)
+        savgol_toggle_button.grid(row=2, column=1, sticky='ew')
+        savgol_label = ttk.Label(entry_frame, text='Savitzky-Golay Filter')
+        savgol_label.grid(row=2, column=0)
+
+        # Degree of polynomial
+        self.add_entry(popup, entry_frame, self.inputs, key="poly_deg",
+                       text="Polynomial Number:", subscript='', units="",
+                       tvar=self.poly_deg, ent_w=8, row=3, in_window=True,
+                       command=lambda tvar, variable, key, pf:
+                       self.storage.check_for_number(tvar, variable, key, False, pf))
+        # Filter window size
+        self.add_entry(popup, entry_frame, self.inputs, key="filter_win",
+                       text="Filter Window Size:", subscript='', units="",
+                       tvar=self.filter_win, ent_w=8, row=4, in_window=True,
+                       command=lambda tvar, variable, key, pf:
+                       self.storage.check_for_number(tvar, variable, key, False, pf))
+        
+        button_row = 7
+        b1 = ttk.Button(entry_frame, text='Close & Refresh', command=lambda: self.close_and_refresh(popup))
+        b1.grid(row=button_row, column=0, sticky="ew")
+        b2 = ttk.Button(entry_frame, text='Refresh', command=self.refresh_graphs)
+        b2.grid(row=button_row, column=2, sticky="ew")
+        tk.mainloop()
+
     def adjust_ss_vars(self):
         """ Function for calling the window for adjusting steady state variables for loading permeation data,
             then update everything if desired """
@@ -946,10 +1061,10 @@ class PermeationPlots(tk.Frame):
                        self.storage.check_for_number(tvar, variable, key, False, pf))
         # Number of data points used in determining the steady state and max time
         self.add_entry(popup, entry_frame, self.inputs, key="ss_range",
-                       text="Steady State Range:", subscript='', units="data points",
-                       tvar=self.gen_ss_range, ent_w=8, row=4, in_window=True,
-                       command=lambda tvar, variable, key, pf:
-                       self.storage.check_for_number(tvar, variable, key, False, pf))
+                    text="Steady State Range:", subscript='', units="data points",
+                    tvar=self.gen_ss_range, ent_w=8, row=4, in_window=True,
+                    command=lambda tvar, variable, key, pf:
+                    self.storage.check_for_number(tvar, variable, key, False, pf))
 
         button_row = 5
         b1 = ttk.Button(entry_frame, text='Close & Refresh', command=lambda: self.close_and_refresh(popup))
@@ -972,7 +1087,7 @@ class PermeationPlots(tk.Frame):
         N = len(X)
         p = len(X.columns) + 1  # plus one because LinearRegression adds an intercept term
 
-        X_with_intercept = np.empty(shape=(N, p), dtype=np.float)
+        X_with_intercept = np.empty(shape=(N, p), dtype='float')
         X_with_intercept[:, 0] = 1
         X_with_intercept[:, 1:p] = X.values
 
@@ -1016,15 +1131,18 @@ class PermeationPlots(tk.Frame):
                                 " range exceeded the limit of " + str(len(data['dSecP']) - self.t0[filename]) + \
                                 " data points. Steady state range set to " + str(self.ss_range[filename]) + \
                                 " data points.\n\n"
-
+            
         # determine the leak rate. self.leak_range points before opening, not including t0 (note that .loc is inclusive)
         self.pleak_lf[filename] = \
             self.get_rates(data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 't'],
                            data.loc[self.t0[filename] - self.leak_range[filename]:self.t0[filename] - 1, 'SecP'])
-
+        
         # determine row number when steady state pressure rate is achieved, checking to ensure it is before the end of
         # the file and after the minimum time delay + t0
-        dSecP = data['dSecP'].rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
+        if self.rolling==False:
+            dSecP = data['dSecP']
+        else:
+            dSecP = data['dSecP'].rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
         neg_dSecP = np.where(dSecP < 0)[0]  # List of all terms in dSecP which are less than 0
         # Minimum terms in a row required to determine if the pressure drop off was reached
         min_seq = max(self.ss_range[filename] // 2 - 1, 1)
@@ -1065,8 +1183,8 @@ class PermeationPlots(tk.Frame):
                                           data.loc[self.t0[filename], 't'], 3)) + " s.\n\n"
 
         # Find the data point at which an equilibrium is reached
-        ddSecP = pd.Series((dSecP.loc[2:].to_numpy() - dSecP.loc[:len(dSecP) - 3].to_numpy()) /
-                           (data.loc[2:, 't'].to_numpy() - data.loc[:len(dSecP) - 3, 't'].to_numpy()))
+        ddSecP = pd.Series((-dSecP.loc[4:].to_numpy() + 8*dSecP.loc[3:len(dSecP)-2].to_numpy() - 8*dSecP.loc[1:len(dSecP)-4].to_numpy() + dSecP.loc[:len(dSecP)-5].to_numpy()) /
+                           12*(data.loc[4:, 't'].to_numpy() - data.loc[3:len(dSecP)-2, 't'].to_numpy()))
         ddSecP = ddSecP.rolling(window=self.ss_range[filename], center=True, min_periods=1).mean()
         zeros = np.where(abs(ddSecP) < self.ss_tol.get())[0]
         zeros = [z for z in zeros if self.t0[filename] + ss_del < z < ss_time_max - min_seq - 2]
@@ -1214,6 +1332,20 @@ class PermeationPlots(tk.Frame):
         # Prep for the time-lag method
         x_intercept = (self.pss_lf[filename]["intercept"] - self.pleak_lf[filename]["intercept"]) / \
                       (self.pleak_lf[filename]["slope"] - self.pss_lf[filename]["slope"])
+        
+        #find error from x intercept
+        ss_slope_err = self.pss_lf[filename]['slope error']
+        ss_int_err = self.pss_lf[filename]['intercept error']
+        leak_slope_err = self.pleak_lf[filename]['slope error']
+        leak_int_err = self.pleak_lf[filename]['intercept error']
+        dif1 = self.pleak_lf[filename]["slope"]-self.pss_lf[filename]["slope"]
+        dif2 = self.pss_lf[filename]["intercept"] - self.pleak_lf[filename]["intercept"]
+        x_err = np.sqrt((ss_int_err / dif1)**2 + 
+                        (leak_int_err / dif1)**2 + 
+                        (leak_slope_err * dif2 / dif1**2)**2 + 
+                        (ss_slope_err * dif2 / dif1**2)**2)
+        
+        #find the y intercept as well as the time lag
         y_intercept = self.pleak_lf[filename]["slope"] * x_intercept + self.pleak_lf[filename]["intercept"]
         self.intercept[filename] = (x_intercept, y_intercept)
         self.tlag[filename] = x_intercept - data.loc[self.t0[filename], 't']
@@ -1227,8 +1359,15 @@ class PermeationPlots(tk.Frame):
         # calculate diffusivity using time-lag method
         sl = self.sample_thickness.get() * 0.001  # converted to meters
         D = sl ** 2 / (6 * self.tlag[filename])
+        self.D_tlag[filename] = D
         if skipD:  # If skipping the calculations of D
             D = float("NaN")
+
+        #calculate the uncetainty of D using the time lag method
+        #note: the error in the time lag is the same as the error in the x intercept
+        sl_err = self.sample_thickness_err.get() * 0.001  # converted to meters
+        self.D_tlag_err[filename] = np.sqrt((sl_err * sl / 3 / self.tlag[filename])**2 + 
+                                  (x_err * sl**2 / 6 / self.tlag[filename]**2)**2)
 
         # Prepare for optimization
         Jt = data.loc[self.t0[filename] + 1:self.tss[filename] + self.ss_range[filename], 'dSecP'].to_numpy() * \
@@ -1309,7 +1448,7 @@ class PermeationPlots(tk.Frame):
             [(-1) ** n * np.exp(-self.D[filename] * n ** 2 * np.pi ** 2 * (self.D_time[filename] + self.dt[filename]) /
                                 sl ** 2) for n in range(1, 20)]))
         if debug:
-            lhs = A * (Jt - J0) / (Jinf - J0)
+            lhs = self.A[filename] * (Jt - J0) / (Jinf - J0)
             plt.figure()
             plt.plot(lhs[1:], label='lhs')
             plt.plot(self.rhs_cf[filename][1:], label='rhs')
@@ -1371,11 +1510,14 @@ class PermeationPlots(tk.Frame):
         self.Prate_label.set(self.Prate[filename])
         self.F_label.set(self.F[filename])
         self.D_label.set(self.D[filename])
+        self.D_tlag_label.set(self.D_tlag[filename])
         self.K_label.set(self.Ks[filename])
+        self.tss_label.set(self.tss[filename])
         self.Phi_err_label.set(self.Phi_err[filename])
         self.Prate_err_label.set(self.Prate_err[filename])
         self.F_err_label.set(self.F_err[filename])
         self.D_err_label.set(self.D_err[filename])
+        self.D_tlag_err_label.set(self.D_tlag_err[filename])
         self.K_err_label.set(self.Ks_err[filename])
 
     def update_PDK_plot(self, *args):

@@ -89,6 +89,7 @@ class Storage:
 
         # estimated secondary pressure parameters
         self.t_L = tk.DoubleVar(value=0)  # Estimated time lag
+        self.tss = tk.DoubleVar(value=0)  # Estimated time to steady state
         self.Phi = tk.DoubleVar(value=0)  # Estimated permeability
         self.flux = tk.DoubleVar(value=0)  # Estimated molar flux
         self.flux_atoms = tk.DoubleVar(value=0)  # Estimated  atomic flux
@@ -255,6 +256,7 @@ class Storage:
             Variable names and equations copied from Excel. This method reduced extra calls to the tk variables. """
         self.t_L.set(self.x_samp2.get()**2 / 6 / (
                 self.D0.get() * np.exp(-1 * self.E_D.get() * self.invTk.get() / self.R)))  # s, Time-lag
+        self.tss.set(0.536832 * 6 * self.t_L.get())
         self.Phi.set(self.P0.get() *
                      np.exp(-1 * self.E_P.get() * self.invTk.get() / self.R))  # mol(Q2)/m/s/sqrt(Pa), Molecular permeability
         self.flux.set(self.Phi.get() *
