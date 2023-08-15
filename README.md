@@ -192,10 +192,12 @@ Thomas Fuerst
 
 Chase Taylor 
 
+Nathan Gehmlich
+
 Joey Watkins (https://github.com/joeymwatkins) built most of the original functionality. George Evans 
 (https://github.com/GeorgeEvans0) added the "Absorption Plots" tab, cleaned up errors, made visual changes, and 
 added functionality. Thomas Fuerst (https://github.com/FuerstT) was the primary supervisor over this project, with Chase 
-Taylor (https://github.com/taylchas) as secondary supervisor.
+Taylor (https://github.com/taylchas) as secondary supervisor. Nathan Gehmlich (https://github.com/BigNate7) provided updates to the code as of 08/15/23.
 
 This work was prepared for the U.S. Department of Energy, Office of Fusion Energy Sciences, under the DOE Idaho Field 
 Office contract number DE-AC07–05ID14517.
