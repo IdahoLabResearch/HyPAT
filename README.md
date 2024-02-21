@@ -8,7 +8,8 @@ volume method and data from absorption experiments using a Sieverts'-type appara
 provides direct comparison for experimental results as well as timescale and permeation rate estimates for experiment 
 preparation based on the user-input parameters. 
 
-Find more details about HyPAT v1.0.0 in the SoftwareX publication ["HyPAT: A GUI for high-throughput gas-driven hydrogen permeation data analysis."](https://doi.org/10.1016/j.softx.2022.101284) A publication on HyPAT v2.0.0 is in progress.
+Find more details about HyPAT v1.0.0 in the SoftwareX publication ["HyPAT: A GUI for high-throughput gas-driven hydrogen permeation data analysis."](https://doi.org/10.1016/j.softx.2022.101284) 
+Find more details about HyPAT v2.0.0 in the SoftwareX publication ["Hydrogen Permeation and Absorption Tool (HyPAT v2.0): An update to facilitate analyses of data from hydrogen absorption experiments."](https://doi.org/10.1016/j.softx.2023.101430)
 
 ## Description
 The Hydrogen Permeation and Absorption Tool (HyPAT) provides a convenient application that allows the user to 
